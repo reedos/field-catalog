@@ -8,7 +8,7 @@ from pathlib import Path
 from .bursts import burst_pick, grouped
 from .catalog import Catalog
 from .disk import CONFIRM_DELETE, CONFIRM_OFFLOAD, DiskError, pending, unlink_originals
-from .importer import import_paths, walk_photos
+from .importer import import_paths, refresh_previews, walk_photos
 
 
 def _out(ok: bool, **payload) -> int:
@@ -31,6 +31,19 @@ def cmd_import(ns: argparse.Namespace) -> int:
     if not paths:
         return _out(False, error=f"no photos under {ns.source}")
     result = import_paths(cat, paths)
+    return _out(True, **result)
+
+
+def cmd_refresh_previews(ns: argparse.Namespace) -> int:
+    cat = _catalog(ns)
+    n = {"last": 0}
+
+    def progress(i: int, total: int) -> None:
+        if i == total or i - n["last"] >= 50:
+            n["last"] = i
+            print(f"refresh {i}/{total}", file=sys.stderr)
+
+    result = refresh_previews(cat, progress=progress)
     return _out(True, **result)
 
 
@@ -171,6 +184,9 @@ def build_parser() -> argparse.ArgumentParser:
     im = sub.add_parser("import", help="import a folder or file; originals stay put")
     im.add_argument("--source", required=True)
     im.set_defaults(func=cmd_import)
+
+    rp = sub.add_parser("refresh-previews", help="rewrite previews from originals (fixes orientation)")
+    rp.set_defaults(func=cmd_refresh_previews)
 
     ls = sub.add_parser("list")
     ls.add_argument("--verdict", choices=["keep", "reject", "unrated"])
