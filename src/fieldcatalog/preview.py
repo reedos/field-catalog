@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 RAW_SUFFIXES = {".nef", ".cr2", ".cr3", ".arw", ".raf", ".orf", ".rw2", ".dng"}
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"} | RAW_SUFFIXES
@@ -29,6 +29,12 @@ def extract_embedded_jpeg(path: Path) -> bytes | None:
             best = blob
         start = i + 3
     return best if best and len(best) > 20_000 else best
+
+
+def apply_orientation(img: Image.Image) -> Image.Image:
+    """Honor EXIF Orientation so portrait D850 frames stay portrait."""
+    transposed = ImageOps.exif_transpose(img)
+    return transposed if transposed is not None else img
 
 
 def open_for_preview(path: Path) -> Image.Image:
@@ -59,7 +65,7 @@ def open_for_preview(path: Path) -> Image.Image:
 def write_preview(src: Path, dest: Path, max_edge: int = 1600, quality: int = 82) -> tuple[int, int]:
     dest.parent.mkdir(parents=True, exist_ok=True)
     with open_for_preview(src) as img:
-        img = img.convert("RGB")
+        img = apply_orientation(img).convert("RGB")
         w, h = img.size
         scale = min(1.0, max_edge / max(w, h))
         if scale < 1:
