@@ -42,28 +42,41 @@ def cmd_list(ns: argparse.Namespace) -> int:
     if ns.status:
         where["original_status"] = ns.status
     shots = cat.list(**where)
-    return _out(
-        True,
-        count=len(shots),
-        shots=[
-            {
-                "id": s.id,
-                "original_path": s.original_path,
-                "preview_path": s.preview_path,
-                "original_status": s.original_status,
-                "verdict": s.verdict,
-                "captured_at": s.captured_at,
-                "lat": s.lat,
-                "lon": s.lon,
-                "sharpness": s.sharpness,
-                "burst_id": s.burst_id,
-                "common_name": s.common_name,
-                "animal_type": s.animal_type,
-                "stars": s.stars,
-            }
-            for s in shots
-        ],
-    )
+    verdicts: dict[str, int] = {}
+    statuses: dict[str, int] = {}
+    for s in shots:
+        verdicts[s.verdict] = verdicts.get(s.verdict, 0) + 1
+        statuses[s.original_status] = statuses.get(s.original_status, 0) + 1
+    payload = {
+        "count": len(shots),
+        "verdicts": verdicts,
+        "original_status": statuses,
+        "previews": str(cat.previews),
+    }
+    if ns.summary:
+        return _out(True, **payload)
+    shown = shots[: ns.limit] if ns.limit else shots
+    payload["shots"] = [
+        {
+            "id": s.id,
+            "original_path": s.original_path,
+            "preview_path": s.preview_path,
+            "original_status": s.original_status,
+            "verdict": s.verdict,
+            "captured_at": s.captured_at,
+            "lat": s.lat,
+            "lon": s.lon,
+            "sharpness": s.sharpness,
+            "burst_id": s.burst_id,
+            "common_name": s.common_name,
+            "animal_type": s.animal_type,
+            "stars": s.stars,
+        }
+        for s in shown
+    ]
+    if ns.limit and len(shots) > ns.limit:
+        payload["truncated"] = True
+    return _out(True, **payload)
 
 
 def cmd_set_verdict(ns: argparse.Namespace) -> int:
@@ -162,6 +175,8 @@ def build_parser() -> argparse.ArgumentParser:
     ls = sub.add_parser("list")
     ls.add_argument("--verdict", choices=["keep", "reject", "unrated"])
     ls.add_argument("--status", choices=["present", "deleted", "offloaded"])
+    ls.add_argument("--summary", action="store_true", help="counts only, no shot rows")
+    ls.add_argument("--limit", type=int, default=0, help="max shot rows to print (0 = all)")
     ls.set_defaults(func=cmd_list)
 
     sv = sub.add_parser("set-verdict")
