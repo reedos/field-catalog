@@ -83,3 +83,25 @@ def import_paths(catalog: Catalog, paths: list[Path]) -> dict:
         "errors": errors,
         "ids": [s.id for s in imported],
     }
+
+
+def refresh_previews(catalog: Catalog, *, progress=None) -> dict:
+    """Rewrite previews from originals (orientation, size). Does not re-import or touch originals."""
+    shots = catalog.list()
+    ok = 0
+    missing = 0
+    errors: list[dict] = []
+    total = len(shots)
+    for i, shot in enumerate(shots, start=1):
+        src = Path(shot.original_path)
+        if not src.is_file():
+            missing += 1
+            continue
+        try:
+            write_preview(src, Path(shot.preview_path))
+            ok += 1
+        except Exception as e:
+            errors.append({"id": shot.id, "path": shot.original_path, "error": str(e)})
+        if progress:
+            progress(i, total)
+    return {"refreshed": ok, "missing_originals": missing, "errors": errors, "total": total}
