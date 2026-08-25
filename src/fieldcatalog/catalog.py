@@ -35,13 +35,20 @@ CREATE TABLE IF NOT EXISTS shots (
   burst_id TEXT,
   tags TEXT,
   caption TEXT,
-  bytes_original INTEGER NOT NULL DEFAULT 0
+  bytes_original INTEGER NOT NULL DEFAULT 0,
+  confidence REAL,
+  field_marks TEXT,
+  similar_species TEXT,
+  notes TEXT,
+  gps_from_file INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_shots_verdict ON shots(verdict);
 CREATE INDEX IF NOT EXISTS idx_shots_status ON shots(original_status);
 CREATE INDEX IF NOT EXISTS idx_shots_burst ON shots(burst_id);
-"""
 
+
+
+"""
 
 class Catalog:
     def __init__(self, library: Path):
@@ -53,7 +60,62 @@ class Catalog:
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        self._ensure_migrations()
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(shots)")}
+        added = False
+        if "confidence" not in cols:
+            self.conn.execute("ALTER TABLE shots ADD COLUMN confidence REAL")
+            added = True
+        if "field_marks" not in cols:
+            self.conn.execute("ALTER TABLE shots ADD COLUMN field_marks TEXT")
+            added = True
+        if "gps_from_file" not in cols:
+            self.conn.execute("ALTER TABLE shots ADD COLUMN gps_from_file INTEGER NOT NULL DEFAULT 0")
+            self.conn.execute(
+                "UPDATE shots SET gps_from_file = 1 WHERE lat IS NOT NULL AND lon IS NOT NULL"
+            )
+            added = True
+        if "similar_species" not in cols:
+            self.conn.execute("ALTER TABLE shots ADD COLUMN similar_species TEXT")
+            added = True
+        if "notes" not in cols:
+            self.conn.execute("ALTER TABLE shots ADD COLUMN notes TEXT")
+            added = True
+        if added:
+            self.conn.commit()
+
+
+    def _ensure_migrations(self) -> None:
+        self.conn.execute("CREATE TABLE IF NOT EXISTS migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL)")
+        self.conn.commit()
+
+
+    def distinct_field_marks(self, limit: int = 200) -> list[str]:
+        rows = self.conn.execute(
+            "SELECT DISTINCT json_extract(field_marks, '$[*]') FROM shots WHERE field_marks IS NOT NULL"
+        ).fetchall()
+        # Fallback simple split
+        marks = set()
+        for row in self.conn.execute("SELECT field_marks FROM shots WHERE field_marks IS NOT NULL LIMIT 500"):
+            fm = row["field_marks"]
+            if not fm:
+                continue
+            import json
+            try:
+                arr = json.loads(fm)
+                if isinstance(arr, list):
+                    marks.update([str(x) for x in arr])
+                else:
+                    marks.update([str(fm)])
+            except Exception:
+                # comma separated
+                for part in fm.split(","):
+                    marks.add(part.strip())
+        return list(marks)[:limit]
 
     def close(self) -> None:
         self.conn.close()
