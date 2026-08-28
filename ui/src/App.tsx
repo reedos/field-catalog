@@ -1096,6 +1096,8 @@ function normalizeShot(s: Shot): Shot {
     notes: s.notes || "",
     confidence: s.confidence ?? null,
     gps_from_file: !!s.gps_from_file,
+    preview_width: s.preview_width ?? null,
+    preview_height: s.preview_height ?? null,
   };
 }
 

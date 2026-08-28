@@ -40,14 +40,13 @@ CREATE TABLE IF NOT EXISTS shots (
   field_marks TEXT,
   similar_species TEXT,
   notes TEXT,
-  gps_from_file INTEGER NOT NULL DEFAULT 0
+  gps_from_file INTEGER NOT NULL DEFAULT 0,
+  preview_width INTEGER,
+  preview_height INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_shots_verdict ON shots(verdict);
 CREATE INDEX IF NOT EXISTS idx_shots_status ON shots(original_status);
 CREATE INDEX IF NOT EXISTS idx_shots_burst ON shots(burst_id);
-
-
-
 """
 
 class Catalog:
@@ -89,6 +88,11 @@ class Catalog:
         if "notes" not in cols:
             self.conn.execute("ALTER TABLE shots ADD COLUMN notes TEXT")
             added = True
+        # Lets the grid lay out before any thumbnail has decoded.
+        for col in ("preview_width", "preview_height"):
+            if col not in cols:
+                self.conn.execute(f"ALTER TABLE shots ADD COLUMN {col} INTEGER")
+                added = True
         # list() orders by captured_at DESC on every library load.
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_shots_captured ON shots(captured_at DESC)"

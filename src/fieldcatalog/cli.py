@@ -72,6 +72,8 @@ def shot_json(s: Shot) -> dict:
         "similar_species": s.similar_species,
         "notes": s.notes,
         "gps_from_file": bool(s.gps_from_file),
+        "preview_width": s.preview_width,
+        "preview_height": s.preview_height,
     }
 
 

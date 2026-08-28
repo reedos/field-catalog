@@ -45,6 +45,8 @@ class Shot:
     similar_species: list[str] = field(default_factory=list)
     notes: str = ""
     gps_from_file: bool = False
+    preview_width: Optional[int] = None
+    preview_height: Optional[int] = None
 
     def to_row(self) -> dict[str, Any]:
         d = asdict(self)
@@ -93,6 +95,8 @@ class Shot:
             similar_species=_marks(_col(row, "similar_species")),
             notes=_col(row, "notes") or "",
             gps_from_file=bool(_col(row, "gps_from_file") or 0),
+            preview_width=_col(row, "preview_width"),
+            preview_height=_col(row, "preview_height"),
         )
 
 

@@ -449,3 +449,38 @@ def test_update_many_is_one_transaction(tmp_path: Path):
     assert all(cat.get(i).location == "ridge trail" for i in ids)
     assert cat.update_many([], location="x") == 0
     assert cat.update_many(ids) == 0
+
+
+def test_import_stores_preview_dimensions(tmp_path: Path):
+    """The grid lays out from these; without them every thumbnail load repacks."""
+    src = tmp_path / "card"
+    src.mkdir()
+    Image.new("RGB", (3000, 2000), (40, 80, 40)).save(src / "land.jpg", "JPEG")
+    Image.new("RGB", (2000, 3000), (40, 80, 40)).save(src / "port.jpg", "JPEG")
+    cat = Catalog(tmp_path / "library")
+    result = import_paths(cat, sorted(src.glob("*.jpg")))
+    assert result["imported"] == 2
+
+    by_name = {s.display_name: s for s in cat.list()}
+    land, port = by_name["land"], by_name["port"]
+    assert (land.preview_width, land.preview_height) == (1600, 1066)
+    assert (port.preview_width, port.preview_height) == (1066, 1600)
+    assert land.preview_width > land.preview_height
+    assert port.preview_height > port.preview_width
+
+
+def test_refresh_previews_backfills_dimensions(tmp_path: Path):
+    """Existing libraries have NULL dimensions until previews are refreshed."""
+    from fieldcatalog.importer import refresh_previews
+
+    src = tmp_path / "card"
+    src.mkdir()
+    Image.new("RGB", (3000, 2000), (40, 80, 40)).save(src / "a.jpg", "JPEG")
+    cat = Catalog(tmp_path / "library")
+    sid = import_paths(cat, [src / "a.jpg"])["ids"][0]
+
+    cat.update(sid, preview_width=None, preview_height=None)
+    assert cat.get(sid).preview_width is None
+
+    assert refresh_previews(cat)["refreshed"] == 1
+    assert (cat.get(sid).preview_width, cat.get(sid).preview_height) == (1600, 1066)

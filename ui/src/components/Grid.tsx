@@ -7,7 +7,9 @@ import { previewUrl } from "../lib/preview";
 const GAP = 8;
 const TARGET_H = 420;
 const CAPTION_H = 92;
-const DEFAULT_AR = 0.75;
+// 3:2 landscape -- the D850's native ratio, so the first paint is close for
+// most frames and rows barely move once real dimensions arrive.
+const DEFAULT_AR = 1.5;
 
 export interface BurstMeta {
   count: number;
@@ -36,7 +38,6 @@ function packRows(shots: Shot[], containerWidth: number, aspects: Map<string, nu
 
   for (const shot of shots) {
     const ar = aspects.get(shot.id) ?? DEFAULT_AR;
-    const nextCount = buf.length + 1;
     const nextGaps = GAP * buf.length;
     const widthIfAdded = (arSum + ar) * TARGET_H + nextGaps;
     if (buf.length && widthIfAdded > inner) {
@@ -69,7 +70,21 @@ export default function Grid(props: {
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1200);
-  const [aspects, setAspects] = useState<Map<string, number>>(() => new Map());
+  // Aspect ratios learned from decoded images. The catalog already knows the
+  // preview dimensions for anything imported since they started being stored,
+  // so this only fills gaps for older rows.
+  const [learned, setLearned] = useState<Map<string, number>>(() => new Map());
+
+  const aspects = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of props.shots) {
+      if (s.preview_width && s.preview_height) {
+        map.set(s.id, s.preview_width / s.preview_height);
+      }
+    }
+    for (const [id, ar] of learned) map.set(id, ar);
+    return map;
+  }, [props.shots, learned]);
 
   useEffect(() => {
     const el = parentRef.current;
@@ -108,15 +123,31 @@ export default function Grid(props: {
     if (rowIndex >= 0) virtualizer.scrollToIndex(rowIndex, { align: "auto" });
   }, [props.selectedId, rows, virtualizer]);
 
+  // Images decode independently, so aspects arrive in a burst. Collecting them
+  // and flushing once per frame turns N repacks of the whole shot list into one.
+  const pendingAspects = useRef<Map<string, number>>(new Map());
+  const flushHandle = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (flushHandle.current !== null) cancelAnimationFrame(flushHandle.current);
+  }, []);
+
   function rememberAspect(id: string, w: number, h: number) {
     if (!w || !h) return;
     const ar = w / h;
-    setAspects((prev) => {
-      const old = prev.get(id);
-      if (old && Math.abs(old - ar) < 0.01) return prev;
-      const next = new Map(prev);
-      next.set(id, ar);
-      return next;
+    if (Math.abs((aspects.get(id) ?? -1) - ar) < 0.01) return;
+    pendingAspects.current.set(id, ar);
+    if (flushHandle.current !== null) return;
+    flushHandle.current = requestAnimationFrame(() => {
+      flushHandle.current = null;
+      const batch = pendingAspects.current;
+      if (!batch.size) return;
+      pendingAspects.current = new Map();
+      setLearned((prev) => {
+        const next = new Map(prev);
+        for (const [k, v] of batch) next.set(k, v);
+        return next;
+      });
     });
   }
 

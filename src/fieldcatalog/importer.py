@@ -36,7 +36,7 @@ def import_paths(catalog: Catalog, paths: list[Path], *, progress=None) -> dict:
         shot_id = str(uuid.uuid4())
         preview = catalog.preview_file(shot_id)
         try:
-            write_preview(path, preview)
+            preview_w, preview_h = write_preview(path, preview)
             meta = parse_exif(path)
             sharpness = score_sharpness(preview)
         except Exception as e:
@@ -67,6 +67,8 @@ def import_paths(catalog: Catalog, paths: list[Path], *, progress=None) -> dict:
             bytes_original=path.stat().st_size,
             animal_type=infer_animal_type(path.stem),
             gps_from_file=meta.get("lat") is not None and meta.get("lon") is not None,
+            preview_width=preview_w,
+            preview_height=preview_h,
         )
         catalog.upsert(shot)
         imported.append(shot)
@@ -102,7 +104,11 @@ def refresh_previews(catalog: Catalog, *, progress=None) -> dict:
             missing += 1
             continue
         try:
-            write_preview(src, Path(shot.preview_path))
+            w, h = write_preview(src, Path(shot.preview_path))
+            # Dimensions can change here (orientation, max_edge), so keep them
+            # in step with the file the grid is about to lay out.
+            if (w, h) != (shot.preview_width, shot.preview_height):
+                catalog.update(shot.id, preview_width=w, preview_height=h)
             ok += 1
         except Exception as e:
             errors.append({"id": shot.id, "path": shot.original_path, "error": str(e)})
