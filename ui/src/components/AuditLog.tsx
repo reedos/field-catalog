@@ -4,7 +4,7 @@ export default function AuditLog(props: {
 }) {
   return (
     <div className="fixed inset-0 z-[90] bg-ink/80 flex items-center justify-center p-6">
-      <div className="bg-paper text-ink w-full max-w-2xl max-h-[80vh] flex flex-col font-serif">
+      <div className="fc-card w-full max-w-2xl max-h-[80vh] flex flex-col font-serif">
         <div className="px-5 py-3 border-b border-paper-dim">
           <h2 className="text-xl">Audit log</h2>
           <p className="text-sm text-bark mt-1">Recent disk operations</p>

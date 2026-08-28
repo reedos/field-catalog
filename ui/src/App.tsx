@@ -542,10 +542,6 @@ const verdicts = useMemo(() => {
         busy={busy}
         onBulkLocation={() => setShowBulkLocation(true)}
       />
-      <div className="px-3 py-1 text-[10px] text-paper-dim flex gap-3">
-        <span>⌘K palette</span>
-        <span>?</span><span>shortcuts</span>
-      </div>
       {view === "library" ? (
         <Filters
           search={search}
@@ -585,9 +581,11 @@ const verdicts = useMemo(() => {
         />
       ) : null}
       {error ? (
-        <div className="px-4 py-2 text-sm bg-reject/20 text-paper flex justify-between">
+        <div role="alert" className="flex justify-between border-l-4 border-reject bg-reject/15 px-4 py-2 text-sm text-paper">
           <span>{error}</span>
-          <button onClick={() => setError("")}>Dismiss</button>
+          <button className="text-paper-dim transition-colors hover:text-paper" onClick={() => setError("")}>
+            Dismiss
+          </button>
         </div>
       ) : null}
       <main className="flex-1 min-h-0 flex">
@@ -736,12 +734,19 @@ const verdicts = useMemo(() => {
         />
       )}
 
-      <footer className="border-t border-bark px-4 py-1 text-xs text-paper-dim flex gap-4">
-        <span>{filtered.length} shown</span>
-        <span>{shots.length} in library</span>
-        <span>{verdicts.keep} keep</span>
-        <span>{verdicts.reject} reject</span>
-        <span>{verdicts.unrated} unrated</span>
+      <footer className="flex items-center gap-4 border-t border-bark bg-charcoal/60 px-4 py-1.5 text-xs text-paper-dim">
+        <span>
+          <span className="text-paper">{filtered.length}</span> shown · {shots.length} in library
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="text-moss">{verdicts.keep} keep</span>
+          <span className="text-reject">{verdicts.reject} reject</span>
+          <span>{verdicts.unrated} unrated</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <kbd className="fc-kbd">Ctrl+K</kbd> palette
+          <kbd className="fc-kbd">?</kbd> shortcuts
+        </span>
         <span className="ml-auto">
           {burstReviewId
             ? `Burst ${selectedIndex + 1}/${burstMembers.length} · Esc library`

@@ -25,8 +25,8 @@ export default function Filters(props: {
         ref={props.searchRef}
         value={props.search}
         onChange={(e) => props.onSearch(e.target.value)}
-        placeholder="Search  /"
-        className="bg-charcoal border border-bark px-2 py-1 text-sm w-52 outline-none focus:border-moss"
+        placeholder="Search…"
+        className="fc-input w-52"
       />
       <div className="flex gap-1">
         <Pill active={props.animal === ""} onClick={() => props.onAnimal("")}>
@@ -44,7 +44,7 @@ export default function Filters(props: {
       <select
         value={props.location}
         onChange={(e) => props.onLocation(e.target.value)}
-        className="bg-charcoal border border-bark px-2 py-1 text-sm"
+        className="fc-select"
       >
         <option value="">Any place</option>
         <option value="__none__">Unlabeled</option>
@@ -57,7 +57,7 @@ export default function Filters(props: {
       <select
         value={props.starsMin}
         onChange={(e) => props.onStarsMin(Number(e.target.value))}
-        className="bg-charcoal border border-bark px-2 py-1 text-sm"
+        className="fc-select"
       >
         <option value={0}>Any stars</option>
         <option value={1}>1+</option>
@@ -69,7 +69,7 @@ export default function Filters(props: {
       <select
         value={props.verdict}
         onChange={(e) => props.onVerdict(e.target.value as Verdict | "")}
-        className="bg-charcoal border border-bark px-2 py-1 text-sm"
+        className="fc-select"
       >
         <option value="">Any verdict</option>
         <option value="unrated">Unrated</option>
@@ -79,7 +79,7 @@ export default function Filters(props: {
       <select
         value={props.sort}
         onChange={(e) => props.onSort(e.target.value as SortKey)}
-        className="bg-charcoal border border-bark px-2 py-1 text-sm ml-auto"
+        className="fc-select ml-auto"
       >
         <option value="captured_at">Captured date</option>
         <option value="created_at">Import date</option>
@@ -96,9 +96,12 @@ function Pill(props: { active: boolean; onClick: () => void; children: ReactNode
   return (
     <button
       onClick={props.onClick}
-      className={`px-2 py-1 text-xs capitalize border ${
-        props.active ? "border-moss bg-moss/20 text-paper" : "border-bark text-paper-dim"
+      className={`rounded-full border px-2.5 py-1 text-xs capitalize transition-colors duration-150 ${
+        props.active
+          ? "border-moss bg-moss/25 text-paper"
+          : "border-bark text-paper-dim hover:border-moss/60 hover:text-paper"
       }`}
+      aria-pressed={props.active}
     >
       {props.children}
     </button>

@@ -9,6 +9,8 @@ from .bursts import assign_bursts
 from .catalog import Catalog
 from .exif import parse_exif_many
 from .models import Shot
+from PIL import Image
+
 from .preview import is_photo, write_preview
 from .sharpness import score_sharpness
 
@@ -121,3 +123,36 @@ def refresh_previews(catalog: Catalog, *, progress=None) -> dict:
         if progress:
             progress(i, total)
     return {"refreshed": ok, "missing_originals": missing, "errors": errors, "total": total}
+
+
+def backfill_dimensions(catalog: Catalog, *, progress=None) -> dict:
+    """Fill preview_width/height for rows imported before dimensions were stored.
+
+    Reads only each preview's JPEG header, so a few thousand rows take seconds.
+    Without these the grid re-learns aspect ratios as thumbnails decode, and
+    every repack used to shove the scroll position around.
+    """
+    todo = [s for s in catalog.list() if not s.preview_width or not s.preview_height]
+    pairs: list[tuple[int, int, str]] = []
+    missing = 0
+    errors: list[dict] = []
+    total = len(todo)
+    for i, shot in enumerate(todo, start=1):
+        path = Path(shot.preview_path)
+        if not path.is_file():
+            missing += 1
+            continue
+        try:
+            with Image.open(path) as img:
+                w, h = img.size
+            pairs.append((w, h, shot.id))
+        except Exception as e:
+            errors.append({"id": shot.id, "error": str(e)})
+        if progress:
+            progress(i, total)
+    if pairs:
+        catalog.conn.executemany(
+            "UPDATE shots SET preview_width = ?, preview_height = ? WHERE id = ?", pairs
+        )
+        catalog.conn.commit()
+    return {"backfilled": len(pairs), "missing_previews": missing, "errors": errors, "total": total}

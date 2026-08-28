@@ -56,9 +56,9 @@ export default function CommandPalette({
 
   return (
     <div className="fixed inset-0 z-50 bg-ink/80 flex items-start justify-center pt-24 p-4" onClick={onClose}>
-      <div className="w-full max-w-xl bg-paper text-ink rounded shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="fc-card w-full max-w-xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="px-4 py-3 border-b border-bark flex items-center gap-2">
-          <span className="text-paper-dim">⌘K</span>
+          <span className="text-bark/80">Ctrl+K</span>
           <input
             id="cmd-input"
             value={query}

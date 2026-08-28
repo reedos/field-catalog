@@ -127,8 +127,13 @@ export default function Grid(props: {
     virtualizer.measure();
   }, [rows, virtualizer]);
 
+  // Scroll to the selection only when the selection itself changes. Keying this
+  // on `rows` made every repack (each newly learned aspect ratio) yank the
+  // viewport back to the selected row -- the "scrollbar fights me" bug.
+  const lastScrolledTo = useRef<string | null>(null);
   useEffect(() => {
-    if (!props.selectedId) return;
+    if (!props.selectedId || props.selectedId === lastScrolledTo.current) return;
+    lastScrolledTo.current = props.selectedId;
     let rowIndex = -1;
     for (let i = 0; i < rows.length; i++) {
       if (rows[i].items.some((it) => it.shot.id === props.selectedId)) {
@@ -229,8 +234,12 @@ function Cell(props: {
   const stacked = (burst?.count || 0) > 1;
   return (
     <div
-      className={`flex flex-col overflow-hidden bg-charcoal ${
-        props.picked ? "ring-2 ring-ochre" : props.selected ? "ring-2 ring-moss" : "ring-1 ring-bark"
+      className={`group flex flex-col overflow-hidden rounded-md bg-charcoal transition-shadow duration-150 ${
+        props.picked
+          ? "ring-2 ring-ochre shadow-lg shadow-ochre/10"
+          : props.selected
+            ? "ring-2 ring-moss shadow-lg shadow-moss/20"
+            : "ring-1 ring-bark hover:ring-moss/50 hover:shadow-md hover:shadow-black/40"
       }`}
       style={{ width: props.imgWidth, height: props.imgHeight + CAPTION_H }}
     >
@@ -247,7 +256,7 @@ function Cell(props: {
             alt={shot.common_name || shot.display_name || shot.id}
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
             style={{ imageOrientation: "from-image" }}
             onLoad={(e) => {
               const img = e.currentTarget;
@@ -255,25 +264,25 @@ function Cell(props: {
             }}
           />
         ) : (
-          <div className="h-full w-full bg-bark" />
+          <div className="h-full w-full animate-pulse bg-bark/70" />
         )}
         <div className="absolute top-1 left-1 flex gap-1">
           {shot.verdict !== "unrated" ? (
             <span
-              className={`text-[10px] px-1 uppercase ${
+              className={`rounded-sm px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider shadow-sm ${
                 shot.verdict === "keep" ? "bg-moss text-paper" : "bg-reject text-paper"
               }`}
             >
               {shot.verdict}
             </span>
           ) : null}
-          {shot.favorite ? <span className="text-[10px] px-1 bg-ochre text-ink">★</span> : null}
+          {shot.favorite ? <span className="rounded-sm bg-ochre px-1 py-0.5 text-[9px] text-ink shadow-sm">★</span> : null}
         </div>
         {shot.color ? (
           <span className="absolute top-1 right-1 h-2 w-2 rounded-full" style={{ background: shot.color }} />
         ) : null}
       </button>
-      <div className="flex-1 min-h-0 px-2 py-1.5 text-left">
+      <div className="flex-1 min-h-0 border-t border-bark/60 px-2 py-1.5 text-left">
         <div className="text-[13px] leading-tight truncate text-paper">{shot.common_name || "Needs ID"}</div>
         <div className="text-[11px] italic text-paper-dim truncate">{shot.scientific_name || " "}</div>
         <div className="text-[10px] text-paper-dim truncate mt-0.5">
@@ -298,7 +307,7 @@ function Mini(props: { onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
-      className="text-[9px] tracking-wide px-1 py-0.5 border border-bark text-paper-dim hover:border-moss hover:text-paper"
+      className="rounded border border-bark px-1.5 py-0.5 text-[9px] tracking-wide text-paper-dim transition-colors duration-150 hover:border-moss hover:text-moss"
       onClick={(e) => {
         e.stopPropagation();
         props.onClick();

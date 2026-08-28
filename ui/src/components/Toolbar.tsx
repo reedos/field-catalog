@@ -29,49 +29,47 @@ export default function Toolbar(props: {
   onBulkLocation?: () => void;
 }) {
   return (
-    <header className="flex items-center gap-3 border-b border-bark px-4 py-2 bg-charcoal">
-      <div className="flex items-center gap-3">
+    <header className="flex items-center gap-3 border-b border-bark bg-charcoal px-4 py-2">
+      <div className="flex items-center gap-1">
         {props.onBack ? (
           <button
             type="button"
             onClick={props.onBack}
-            className="px-2 py-1 text-sm border border-bark text-paper-dim hover:text-paper disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Back"
+            className="fc-btn fc-ghost px-2"
+            title={props.backTo ? `Back to ${props.backTo}` : "Back (Alt+←)"}
             disabled={!props.canGoBack}
           >
-            ← Back
+            ←
           </button>
-        ) : null}
-        {props.canGoBack && props.backTo ? (
-          <span className="text-xs text-paper-dim max-w-[180px] truncate" title={`Back to ${props.backTo}`}>
-            to {props.backTo}
-          </span>
         ) : null}
         {props.onForward ? (
           <button
             type="button"
             onClick={props.onForward}
-            className="px-2 py-1 text-sm border border-bark text-paper-dim hover:text-paper disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Forward"
+            className="fc-btn fc-ghost px-2"
+            title="Forward (Alt+→)"
             disabled={!props.canGoForward}
           >
-            Forward →
+            →
           </button>
         ) : null}
       </div>
-      <div className="font-serif text-lg tracking-wide text-paper">
-        Field Catalog
+
+      <div className="font-serif text-lg tracking-[0.06em] text-paper">
+        Field <span className="text-ochre">Catalog</span>
       </div>
-      <nav className="flex gap-1 ml-4">
+
+      <nav className="ml-3 flex gap-0.5 rounded-lg border border-bark bg-ink/50 p-0.5">
         {ITEMS.map((item) => (
           <button
             type="button"
             key={item.id}
             onClick={() => props.onView(item.id)}
-            className={`px-3 py-1 text-sm rounded-sm ${
+            aria-current={props.view === item.id ? "page" : undefined}
+            className={`rounded-md px-3 py-1 text-sm transition-colors duration-150 ${
               props.view === item.id
-                ? "bg-moss text-paper"
-                : "text-paper-dim hover:text-paper"
+                ? "bg-moss text-paper shadow-sm"
+                : "text-paper-dim hover:bg-bark/50 hover:text-paper"
             }`}
           >
             {item.label}
@@ -80,7 +78,12 @@ export default function Toolbar(props: {
       </nav>
 
       <div className="ml-auto flex items-center gap-2">
-        {props.busy ? <span className="text-xs text-ochre">{props.busy}</span> : null}
+        {props.busy ? (
+          <span className="flex items-center gap-1.5 text-xs text-ochre">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ochre" />
+            {props.busy}
+          </span>
+        ) : null}
         <button
           type="button"
           onClick={(e) => {
@@ -88,7 +91,7 @@ export default function Toolbar(props: {
             if (props.identifyingSeries) props.onCancelIdentify();
             else props.onIdentifySeries();
           }}
-          className="px-3 py-1 text-sm border border-moss text-moss hover:bg-moss hover:text-paper"
+          className={`fc-btn ${props.identifyingSeries ? "fc-warn" : "fc-accent"}`}
         >
           {props.identifyingSeries ? "Stop identify" : "Identify series"}
         </button>
@@ -98,7 +101,7 @@ export default function Toolbar(props: {
             e.preventDefault();
             props.onBulkLocation?.();
           }}
-          className="px-3 py-1 text-sm border border-moss text-moss hover:bg-moss hover:text-paper"
+          className="fc-btn fc-accent"
         >
           Bulk location
         </button>
@@ -108,17 +111,18 @@ export default function Toolbar(props: {
             e.preventDefault();
             props.onImport();
           }}
-          className="px-3 py-1 text-sm border border-moss text-moss hover:bg-moss hover:text-paper"
+          className="fc-btn border-moss bg-moss text-paper hover:bg-moss-dark hover:border-moss-dark"
         >
           Import folder
         </button>
+        <span className="mx-0.5 h-5 w-px bg-bark" aria-hidden />
         <button
           type="button"
           onClick={(e) => {
             e.preventDefault();
             props.onDelete();
           }}
-          className="px-3 py-1 text-sm border border-reject/60 text-reject hover:bg-reject hover:text-paper"
+          className="fc-btn fc-danger"
         >
           Delete rejected
         </button>
@@ -126,21 +130,9 @@ export default function Toolbar(props: {
           type="button"
           onClick={(e) => {
             e.preventDefault();
-            // quick preview of pending count
-            // will open dialog in dry-run mode
-            props.onDelete();
-          }}
-          className="px-3 py-1 text-sm border border-bark text-paper-dim hover:text-paper"
-        >
-          Pending
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
             props.onOffload();
           }}
-          className="px-3 py-1 text-sm border border-ochre/60 text-ochre hover:bg-ochre hover:text-ink"
+          className="fc-btn fc-warn"
         >
           Offload keepers
         </button>

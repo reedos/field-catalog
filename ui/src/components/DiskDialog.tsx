@@ -31,7 +31,7 @@ export default function DiskDialog(props: {
 
   return (
     <div className="fixed inset-0 z-[80] bg-ink/80 flex items-center justify-center p-6">
-      <div className="bg-paper text-ink w-full max-w-3xl max-h-[90vh] flex flex-col font-serif">
+      <div className="fc-card w-full max-w-3xl max-h-[90vh] flex flex-col font-serif">
         <div className="px-5 py-3 border-b border-paper-dim">
           <h2 className="text-xl">
             {props.kind === "delete" ? "Unlink rejected originals" : "Offload keeper originals"}

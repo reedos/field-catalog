@@ -11,7 +11,7 @@ from pathlib import Path
 from .bursts import burst_pick, grouped
 from .catalog import Catalog
 from .disk import CONFIRM_DELETE, CONFIRM_OFFLOAD, DiskError, pending, unlink_originals
-from .importer import import_paths, refresh_previews, walk_photos
+from .importer import backfill_dimensions, import_paths, refresh_previews, walk_photos
 from .models import Shot
 
 
@@ -125,6 +125,12 @@ def cmd_import(ns: argparse.Namespace) -> int:
     if not paths:
         return _out(False, error=f"no photos under {ns.source}")
     result = import_paths(cat, paths, progress=_stderr_progress("import", every=10))
+    return _out(True, **result)
+
+
+def cmd_backfill_dimensions(ns: argparse.Namespace) -> int:
+    cat = _catalog(ns)
+    result = backfill_dimensions(cat, progress=_stderr_progress("dimensions", every=500))
     return _out(True, **result)
 
 
@@ -525,6 +531,9 @@ def build_parser() -> argparse.ArgumentParser:
     fm.add_argument("--limit", type=int, default=200)
     fm.set_defaults(func=cmd_field_marks)
 
+    bd = sub.add_parser("backfill-dimensions", help="fill preview sizes for rows imported before they were stored")
+    bd.set_defaults(func=cmd_backfill_dimensions)
+
     sv = sub.add_parser("serve", help="persistent worker: JSON requests on stdin, responses on stdout")
     sv.set_defaults(func=cmd_serve)
 
@@ -536,7 +545,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 # Commands that can run for minutes. They get their own lane so a verdict typed
 # mid-import answers immediately instead of queueing behind it.
-SLOW_COMMANDS = {"identify", "import", "refresh-previews"}
+SLOW_COMMANDS = {"identify", "import", "refresh-previews", "backfill-dimensions"}
 
 
 def serve_loop(library: str, stdin, stdout) -> None:

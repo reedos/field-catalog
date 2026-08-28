@@ -13,6 +13,66 @@ body {
   background: #161410;
   color: #efe6d6;
   font-family: "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer base {
+  ::selection {
+    @apply bg-moss/50 text-paper;
+  }
+  :focus-visible {
+    @apply outline outline-2 outline-ochre/70 outline-offset-1;
+  }
+}
+
+@layer components {
+  /* One button vocabulary for the whole app. Pair fc-btn with a variant. */
+  .fc-btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-sm leading-none whitespace-nowrap select-none transition-colors duration-150;
+  }
+  .fc-btn:active {
+    transform: translateY(1px);
+  }
+  .fc-btn:disabled {
+    @apply opacity-40 cursor-not-allowed;
+  }
+  .fc-accent {
+    @apply border-moss/70 text-moss hover:bg-moss hover:text-paper hover:border-moss;
+  }
+  .fc-warn {
+    @apply border-ochre/50 text-ochre hover:bg-ochre hover:text-ink hover:border-ochre;
+  }
+  .fc-danger {
+    @apply border-reject/50 text-reject hover:bg-reject hover:text-paper hover:border-reject;
+  }
+  .fc-ghost {
+    @apply border-transparent text-paper-dim hover:text-paper hover:bg-bark/50;
+  }
+
+  .fc-input {
+    @apply bg-charcoal border border-bark rounded-md px-2.5 py-1.5 text-sm outline-none transition-colors duration-150 placeholder:text-paper-dim/60;
+  }
+  .fc-input:focus {
+    @apply border-moss;
+  }
+
+  .fc-select {
+    @apply bg-charcoal border border-bark rounded-md px-2 py-1.5 text-sm text-paper-dim outline-none transition-colors duration-150 cursor-pointer;
+  }
+  .fc-select:hover,
+  .fc-select:focus {
+    @apply border-moss/70 text-paper;
+  }
+
+  /* Keyboard hint chip, dark chrome. */
+  .fc-kbd {
+    @apply inline-block rounded border border-bark bg-ink px-1.5 py-0.5 text-[10px] leading-none text-paper-dim align-middle;
+  }
+
+  /* Light modal card on the dark app. */
+  .fc-card {
+    @apply bg-paper text-ink rounded-lg shadow-2xl ring-1 ring-bark/40;
+  }
 }
 
 .fc-pin {
@@ -37,20 +97,21 @@ button {
   overflow-y: scroll;
   overflow-x: hidden;
   scrollbar-width: auto;
-  scrollbar-color: #6a7a52 #241f1a;
+  scrollbar-color: #6a7a52 #1c1915;
 }
 
 .fc-scroll::-webkit-scrollbar {
-  width: 14px;
+  width: 12px;
 }
 
 .fc-scroll::-webkit-scrollbar-track {
-  background: #241f1a;
+  background: #1c1915;
 }
 
 .fc-scroll::-webkit-scrollbar-thumb {
   background: #6a7a52;
-  border: 2px solid #241f1a;
+  border: 3px solid #1c1915;
+  border-radius: 6px;
 }
 
 .fc-scroll::-webkit-scrollbar-thumb:hover {
