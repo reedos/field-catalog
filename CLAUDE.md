@@ -3,8 +3,15 @@
 Local wildlife photo catalog. Three parts, one app:
 
 - **Python worker** (`src/fieldcatalog/`) — a CLI that prints JSON. All catalog logic lives here.
-- **Rust/Tauri 2 shell** (`src-tauri/`) — spawns the CLI, exposes `run_worker(args)` and `app_paths()`.
-- **React 18 + Vite + Tailwind UI** (`ui/`) — calls the shell, or the CLI directly in browser dev mode.
+  `fieldcatalog serve` is the persistent mode: one JSON request per stdin line
+  (`{"id": N, "args": [...]}`), same envelope back plus the id. identify/import/refresh-previews run
+  on a slow lane so verdicts stay instant. EOF on stdin is shutdown.
+- **Rust/Tauri 2 shell** (`src-tauri/`) — holds one `serve` child and routes `run_worker(args)`
+  through it by request id; falls back to one-shot spawning only if serve fails to *start* (never
+  after a request was written — re-running a mutation is worse than an error).
+- **React 18 + Vite + Tailwind UI** (`ui/`) — calls the shell; in browser dev the vite plugin holds
+  its own `serve` child. Domain state lives in `ui/src/hooks/` (useShots, useDiskFlow, useIdentify,
+  useViewHistory); App.tsx keeps view/filter/selection state, the keyboard handler, and layout.
 
 Library data lives at `~/FieldCatalog/`: `catalog.sqlite`, `previews/{id}.jpg`, `audit.jsonl`,
 `geocode-cache.json`, `xai.key`. Override with `$FIELDCATALOG_LIBRARY`.
@@ -65,12 +72,15 @@ Mirrored in `ui/src/types.ts` — change both.
 `TODO_UI_POLISH.md`. Don't silently normalize it.
 
 **CLI handler pattern:** one `cmd_*` per subcommand, wired via
-`sub.add_parser(...).set_defaults(func=cmd_x)`. Heavy modules (`geocode`, `vision`, `animal`) are
-imported *inside* handlers — startup cost matters because the UI spawns a fresh process per action.
-Keep those imports lazy.
+`sub.add_parser(...).set_defaults(func=cmd_x)`. Handlers print via `_out()`, which serve mode
+captures per-request through a thread-local buffer — never print around it. `_catalog()` caches one
+Catalog per thread per library; serve's two lanes each get their own sqlite connection, which WAL
+makes safe. Heavy modules (`geocode`, `vision`) stay lazily imported inside handlers to keep the
+one-shot CLI quick.
 
-**SQLite:** schema string in `catalog.py`, `journal_mode=WAL` + `busy_timeout=5000` (every UI action
-is a separate process). Migrations are additive via `PRAGMA table_info` checks in `_migrate()`.
+**SQLite:** schema string in `catalog.py`, `journal_mode=WAL` + `busy_timeout=5000` (serve runs two
+lanes on separate connections, and one-shot CLI calls can still race the app). Migrations are
+additive via `PRAGMA table_info` checks in `_migrate()`.
 
 **Theme:** `ui/tailwind.config.js` defines the field-journal palette — `ink`, `charcoal`, `bark`,
 `paper`, `paper-dim`, `moss`, `moss-dark`, `ochre`, `reject`, serif-first stack. Deliberately not a

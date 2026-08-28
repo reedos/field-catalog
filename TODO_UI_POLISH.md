@@ -5,8 +5,6 @@
 - [ ] Burst pick UI polish: compare view, bulk apply verdicts
 - [ ] Grid performance: virtualizer preload tuning (dimensions are stored now, so the
       layout no longer reflows; this is only about prefetching the next rows)
-- [ ] Forward button never enables: `pushHistory` always leaves `historyIndex` at
-      `length-1`, and the 16-entry trim shifts indices without adjusting it
 - [ ] "Pending" toolbar button is a duplicate of "Delete rejected" — give it its own
       handler or remove it
 - [ ] Accessibility pass: no `role="dialog"` or focus trap on any modal;
@@ -14,8 +12,9 @@
       command palette; grid has no ARIA structure and no Enter-to-open
 - [ ] Ship off this machine: `find_cli()` bakes in `CARGO_MANIFEST_DIR` at compile
       time, so the NSIS bundle only runs here. Needs a sidecar or `resources` entry.
-- [ ] Identify has no real cancellation: the Ollama call has a 300s timeout and "Stop
-      identify" only sets a flag checked between shots, so an in-flight call runs on
+- [ ] Identify has no real cancellation: "Stop identify" only sets a flag checked
+      between shots, so an in-flight model call runs on. The serve worker's slow lane
+      is where a real abort would live now.
 
 ## Medium
 - [ ] Meter component: ensure gradient renders on all browsers
@@ -67,3 +66,10 @@
       never dry-run
 - [x] Import no longer does whole-library work per photo; exiftool runs once per batch
 - [x] Preview dimensions are stored, so the grid lays out before any image decodes
+- [x] Persistent worker: `fieldcatalog serve` behind the Tauri shell and the vite dev
+      shim — one process for the session, ~1ms per request instead of ~140ms spawns,
+      slow lane for identify/import so culling stays responsive
+- [x] Forward button works: history is browser-style now (`lib/historyCore.ts`),
+      entries[index] is always the current state
+- [x] App.tsx split into domain hooks (useShots, useDiskFlow, useIdentify,
+      useViewHistory); 1,116 → 790 lines
