@@ -1,24 +1,27 @@
+import { useMemo } from "react";
 import type { Shot } from "../types";
 
 export default function LifeList(props: {
   shots: Shot[];
   onOpenSpecies: (name: string) => void;
 }) {
-  const map = new Map<string, { common: string; scientific: string; type: string | null; count: number }>();
-  for (const s of props.shots) {
-    const key = (s.scientific_name || s.common_name || "").trim();
-    if (!key) continue;
-    const cur = map.get(key);
-    if (cur) cur.count += 1;
-    else
-      map.set(key, {
-        common: s.common_name || key,
-        scientific: s.scientific_name || "",
-        type: s.animal_type,
-        count: 1,
-      });
-  }
-  const rows = [...map.values()].sort((a, b) => a.common.localeCompare(b.common));
+  const rows = useMemo(() => {
+    const map = new Map<string, { common: string; scientific: string; type: string | null; count: number }>();
+    for (const s of props.shots) {
+      const key = (s.scientific_name || s.common_name || "").trim();
+      if (!key) continue;
+      const cur = map.get(key);
+      if (cur) cur.count += 1;
+      else
+        map.set(key, {
+          common: s.common_name || key,
+          scientific: s.scientific_name || "",
+          type: s.animal_type,
+          count: 1,
+        });
+    }
+    return [...map.values()].sort((a, b) => a.common.localeCompare(b.common));
+  }, [props.shots]);
 
   return (
     <div className="h-full overflow-auto p-8 font-serif text-paper">

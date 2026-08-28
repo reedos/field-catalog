@@ -21,11 +21,14 @@ def walk_photos(source: Path) -> list[Path]:
     return sorted(files)
 
 
-def import_paths(catalog: Catalog, paths: list[Path]) -> dict:
+def import_paths(catalog: Catalog, paths: list[Path], *, progress=None) -> dict:
     imported: list[Shot] = []
     skipped = 0
     errors: list[dict] = []
-    for path in paths:
+    total = len(paths)
+    for i, path in enumerate(paths, start=1):
+        if progress:
+            progress(i, total)
         resolved = str(path.resolve())
         if catalog.by_original(resolved):
             skipped += 1
@@ -73,16 +76,21 @@ def import_paths(catalog: Catalog, paths: list[Path]) -> dict:
         catalog.upsert(shot)
         imported.append(shot)
 
+    # Bursts are recomputed across the whole library, but only the rows whose
+    # burst actually moved get written, and they go out in one transaction --
+    # importing one photo used to issue one committed UPDATE per existing row.
     all_shots = catalog.list()
+    before = {s.id: s.burst_id for s in all_shots}
     assign_bursts(all_shots)
-    for s in all_shots:
-        catalog.update(s.id, burst_id=s.burst_id)
+    changed = [(s.id, s.burst_id) for s in all_shots if before[s.id] != s.burst_id]
+    catalog.set_burst_ids(changed)
 
     return {
         "imported": len(imported),
         "skipped": skipped,
         "errors": errors,
         "ids": [s.id for s in imported],
+        "bursts_rewritten": len(changed),
     }
 
 

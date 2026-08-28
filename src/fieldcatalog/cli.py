@@ -12,9 +12,26 @@ from .importer import import_paths, refresh_previews, walk_photos
 from .models import Shot
 
 
+# Set from --pretty. A full list is thousands of rows crossing the Tauri IPC
+# boundary as one string, so indentation is off unless a human asked for it.
+_PRETTY = False
+
+
 def _out(ok: bool, **payload) -> int:
-    print(json.dumps({"ok": ok, **payload}, indent=2, default=str))
+    print(json.dumps({"ok": ok, **payload}, indent=2 if _PRETTY else None, default=str))
     return 0 if ok else 1
+
+
+def _stderr_progress(label: str, every: int = 50):
+    """Progress callback that prints '<label> i/total' to stderr, never stdout."""
+    last = {"i": 0}
+
+    def progress(i: int, total: int) -> None:
+        if i == total or i - last["i"] >= every:
+            last["i"] = i
+            print(f"{label} {i}/{total}", file=sys.stderr)
+
+    return progress
 
 
 def _catalog(ns: argparse.Namespace) -> Catalog:
@@ -68,20 +85,13 @@ def cmd_import(ns: argparse.Namespace) -> int:
     paths = walk_photos(Path(ns.source))
     if not paths:
         return _out(False, error=f"no photos under {ns.source}")
-    result = import_paths(cat, paths)
+    result = import_paths(cat, paths, progress=_stderr_progress("import", every=10))
     return _out(True, **result)
 
 
 def cmd_refresh_previews(ns: argparse.Namespace) -> int:
     cat = _catalog(ns)
-    n = {"last": 0}
-
-    def progress(i: int, total: int) -> None:
-        if i == total or i - n["last"] >= 50:
-            n["last"] = i
-            print(f"refresh {i}/{total}", file=sys.stderr)
-
-    result = refresh_previews(cat, progress=progress)
+    result = refresh_previews(cat, progress=_stderr_progress("refresh"))
     return _out(True, **result)
 
 
@@ -374,6 +384,7 @@ def cmd_audit(ns: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="fieldcatalog", description="Field Catalog local worker")
     p.add_argument("--library", default="~/FieldCatalog", help="catalog root (previews + sqlite)")
+    p.add_argument("--pretty", action="store_true", help="indent the JSON output for reading by hand")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("init", help="create library folders").set_defaults(func=cmd_init)
@@ -490,8 +501,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
+    global _PRETTY
     parser = build_parser()
     ns = parser.parse_args(argv)
+    _PRETTY = getattr(ns, "pretty", False)
     try:
         code = ns.func(ns)
     except Exception as e:

@@ -59,6 +59,10 @@ class Catalog:
         self.previews.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
+        # The UI spawns one process per call, so a list can land mid-import.
+        # WAL lets the reader through; busy_timeout absorbs the rest.
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.executescript(SCHEMA)
         self._migrate()
         self.conn.commit()
@@ -85,6 +89,10 @@ class Catalog:
         if "notes" not in cols:
             self.conn.execute("ALTER TABLE shots ADD COLUMN notes TEXT")
             added = True
+        # list() orders by captured_at DESC on every library load.
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_shots_captured ON shots(captured_at DESC)"
+        )
         if added:
             self.conn.commit()
 
@@ -95,12 +103,8 @@ class Catalog:
 
 
     def distinct_field_marks(self, limit: int = 200) -> list[str]:
-        rows = self.conn.execute(
-            "SELECT DISTINCT json_extract(field_marks, '$[*]') FROM shots WHERE field_marks IS NOT NULL"
-        ).fetchall()
-        # Fallback simple split
         marks = set()
-        for row in self.conn.execute("SELECT field_marks FROM shots WHERE field_marks IS NOT NULL LIMIT 500"):
+        for row in self.conn.execute("SELECT field_marks FROM shots WHERE field_marks IS NOT NULL"):
             fm = row["field_marks"]
             if not fm:
                 continue
@@ -115,7 +119,8 @@ class Catalog:
                 # comma separated
                 for part in fm.split(","):
                     marks.add(part.strip())
-        return list(marks)[:limit]
+        marks.discard("")
+        return sorted(marks)[:limit]
 
     def close(self) -> None:
         self.conn.close()
@@ -157,6 +162,17 @@ class Catalog:
         self.conn.execute(f"UPDATE shots SET {assignments} WHERE id = ?", [*fields.values(), shot_id])
         self.conn.commit()
         return self.get(shot_id)
+
+    def set_burst_ids(self, pairs: list[tuple[str, str]]) -> int:
+        """Write many burst ids in one transaction. Returns the number of rows written."""
+        if not pairs:
+            return 0
+        self.conn.executemany(
+            "UPDATE shots SET burst_id = ? WHERE id = ?",
+            [(burst_id, shot_id) for shot_id, burst_id in pairs],
+        )
+        self.conn.commit()
+        return len(pairs)
 
     def preview_file(self, shot_id: str) -> Path:
         return self.previews / f"{shot_id}.jpg"

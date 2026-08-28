@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { open, confirm as nativeConfirm } from "@tauri-apps/plugin-dialog";
 import Bursts from "./components/Bursts";
 import AuditLog from "./components/AuditLog";
@@ -38,6 +38,8 @@ export default function App() {
   const [loupe, setLoupe] = useState(false);
   const [view, setView] = useState<View>("library");
   const [search, setSearch] = useState("");
+  // The input stays responsive; the 3500-row filter + sort yields to it.
+  const deferredSearch = useDeferredValue(search);
   const [animal, setAnimal] = useState<AnimalType | "">("");
   const [location, setLocation] = useState("");
   const [starsMin, setStarsMin] = useState(0);
@@ -164,7 +166,7 @@ export default function App() {
   }, [shots]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     let rows = shots.filter((s) => {
       if (needsId && (s.common_name || s.scientific_name)) return false;
       if (animal && s.animal_type !== animal) return false;
@@ -191,7 +193,7 @@ export default function App() {
       return -c || a.id.localeCompare(b.id);
     });
     return rows;
-  }, [shots, animal, location, starsMin, verdict, search, sort]);
+  }, [shots, animal, location, starsMin, verdict, deferredSearch, sort, needsId]);
 
   const shotsById = useMemo(() => new Map(shots.map((s) => [s.id, s])), [shots]);
   const selected = selectedId ? shotsById.get(selectedId) : undefined;
@@ -223,16 +225,37 @@ export default function App() {
     setShots((prev) => prev.map((s) => (s.id === id ? { ...s, ...partial } : s)));
   }
 
+  /** Apply one patch per id in a single pass, instead of cloning the list per id. */
+  function patchShots(patches: Map<string, Partial<Shot>>) {
+    if (!patches.size) return;
+    setShots((prev) => prev.map((s) => (patches.has(s.id) ? { ...s, ...patches.get(s.id)! } : s)));
+  }
+
+  function fail(e: unknown) {
+    setError(e instanceof Error ? e.message : String(e));
+  }
+
+  /** Optimistic write that puts the previous values back if the worker rejects it. */
+  function optimistic(patches: Map<string, Partial<Shot>>, call: () => Promise<unknown>) {
+    const rollback = new Map<string, Partial<Shot>>();
+    for (const [id, partial] of patches) {
+      const cur = shotsById.get(id);
+      if (!cur) continue;
+      rollback.set(id, Object.fromEntries(Object.keys(partial).map((k) => [k, (cur as any)[k]])));
+    }
+    patchShots(patches);
+    return call().catch((e) => {
+      patchShots(rollback);
+      fail(e);
+    });
+  }
+
   async function setVerdictOnly(id: string, v: Verdict) {
-    patchShot(id, { verdict: v });
-    // Fire-and-forget API; errors will be surfaced via global error state if needed
-    api.setVerdict(id, v).catch(e => setError(e instanceof Error ? e.message : String(e)));
+    await optimistic(new Map([[id, { verdict: v }]]), () => api.setVerdict(id, v));
   }
 
   async function applyVerdict(id: string, v: Verdict) {
-    // Optimistic update first, API in background
-    patchShot(id, { verdict: v });
-    api.setVerdict(id, v).catch(e => setError(e instanceof Error ? e.message : String(e)));
+    void optimistic(new Map([[id, { verdict: v }]]), () => api.setVerdict(id, v));
     if (!burstReviewId) return;
     const idx = burstMembers.findIndex((s) => s.id === id);
     const next = burstMembers[idx + 1];
@@ -243,9 +266,10 @@ export default function App() {
     const shot = shotsById.get(id);
     if (!shot) return;
     const next = shot.favorite ? 0 : 1;
-    patchShot(id, { favorite: !shot.favorite });
-    const res = await api.set(id, { favorite: next });
-    if (res.shot) patchShot(id, res.shot);
+    await optimistic(new Map([[id, { favorite: !shot.favorite }]]), async () => {
+      const res = await api.set(id, { favorite: next });
+      if (res.shot) patchShot(id, res.shot);
+    });
   }
 
   async function cycleColor(id: string) {
@@ -253,15 +277,17 @@ export default function App() {
     if (!shot) return;
     const i = COLOR_CYCLE.indexOf((shot.color || "") as (typeof COLOR_CYCLE)[number]);
     const next = COLOR_CYCLE[(i + 1) % COLOR_CYCLE.length] || "none";
-    patchShot(id, { color: next === "none" ? null : next });
-    const res = await api.set(id, { color: next });
-    if (res.shot) patchShot(id, res.shot);
+    await optimistic(new Map([[id, { color: next === "none" ? null : next }]]), async () => {
+      const res = await api.set(id, { color: next });
+      if (res.shot) patchShot(id, res.shot);
+    });
   }
 
   async function setStars(id: string, n: number) {
-    patchShot(id, { stars: n });
-    const res = await api.set(id, { stars: n });
-    if (res.shot) patchShot(id, res.shot);
+    await optimistic(new Map([[id, { stars: n }]]), async () => {
+      const res = await api.set(id, { stars: n });
+      if (res.shot) patchShot(id, res.shot);
+    });
   }
 
   async function setLocationLabel(id: string, label: string) {
@@ -274,13 +300,21 @@ export default function App() {
   }
 
   async function saveIdentity(id: string, common: string, scientific: string) {
-    const res = await api.identify(id, { commonName: common, scientificName: scientific });
-    if (res.shot) patchShot(id, normalizeShot(res.shot));
+    try {
+      const res = await api.identify(id, { commonName: common, scientificName: scientific });
+      if (res.shot) patchShot(id, normalizeShot(res.shot));
+    } catch (e) {
+      fail(e);
+    }
   }
 
   async function saveFieldMarks(id: string, marks: string[]) {
-    const res = await api.set(id, { field_marks: marks.join(",") });
-    if (res.shot) patchShot(id, normalizeShot(res.shot));
+    try {
+      const res = await api.set(id, { field_marks: marks.join(",") });
+      if (res.shot) patchShot(id, normalizeShot(res.shot));
+    } catch (e) {
+      fail(e);
+    }
   }
 
   async function runIdentify(id: string) {
@@ -369,8 +403,10 @@ export default function App() {
   }
 
   async function setAnimalType(id: string, t: AnimalType) {
-    const res = await api.set(id, { animal_type: t });
-    if (res.shot) patchShot(id, normalizeShot(res.shot));
+    await optimistic(new Map([[id, { animal_type: t }]]), async () => {
+      const res = await api.set(id, { animal_type: t });
+      if (res.shot) patchShot(id, normalizeShot(res.shot));
+    });
   }
 
   function move(delta: number) {
@@ -396,39 +432,30 @@ export default function App() {
     setView((v) => (v === "bursts" ? "bursts" : "library"));
   }
 
+  /** Keep one frame of a burst and reject the rest, in a single optimistic write. */
+  async function keepOneOfBurst(keepId: string, memberIds: string[]) {
+    const patches = new Map<string, Partial<Shot>>();
+    for (const id of memberIds) {
+      patches.set(id, { verdict: id === keepId ? "keep" : "reject" });
+    }
+    await optimistic(patches, () =>
+      Promise.all(
+        memberIds.map((id) => api.setVerdict(id, id === keepId ? "keep" : "reject")),
+      ),
+    );
+  }
+
   async function keepThis(id: string) {
     const shot = shotsById.get(id);
     if (!shot) return;
     const members = shots.filter((s) => s.burst_id === shot.burst_id);
-    // Optimistic updates
-    patchShot(id, { verdict: "keep" });
-    for (const m of members) {
-      if (m.id !== id) patchShot(m.id, { verdict: "reject" });
-    }
-    // Fire-and-forget API calls
-    api.setVerdict(id, "keep").catch(e => setError(e instanceof Error ? e.message : String(e)));
-    for (const m of members) {
-      if (m.id !== id) {
-        api.setVerdict(m.id, "reject").catch(e => setError(e instanceof Error ? e.message : String(e)));
-      }
-    }
+    await keepOneOfBurst(id, members.map((m) => m.id));
   }
 
   async function keepPick(burstId: string) {
     const meta = burstMeta.get(burstId);
     if (!meta) return;
-    // Optimistic updates
-    patchShot(meta.keepId, { verdict: "keep" });
-    for (const id of meta.memberIds) {
-      if (id !== meta.keepId) patchShot(id, { verdict: "reject" });
-    }
-    // Fire-and-forget API calls
-    api.setVerdict(meta.keepId, "keep").catch(e => setError(e instanceof Error ? e.message : String(e)));
-    for (const id of meta.memberIds) {
-      if (id !== meta.keepId) {
-        api.setVerdict(id, "reject").catch(e => setError(e instanceof Error ? e.message : String(e)));
-      }
-    }
+    await keepOneOfBurst(meta.keepId, meta.memberIds);
   }
 
   useEffect(() => {
