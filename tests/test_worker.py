@@ -5,7 +5,13 @@ from PIL import Image
 from fieldcatalog.animal import infer_animal_type
 from fieldcatalog.bursts import assign_bursts, burst_pick
 from fieldcatalog.catalog import Catalog
-from fieldcatalog.disk import CONFIRM_DELETE, DiskError, unlink_originals
+from fieldcatalog.disk import (
+    CONFIRM_DELETE,
+    CONFIRM_OFFLOAD,
+    DiskError,
+    pending,
+    unlink_originals,
+)
 from fieldcatalog.importer import import_paths
 from fieldcatalog.geocode import apply_location, capture_day
 from fieldcatalog.models import Shot
@@ -55,7 +61,9 @@ def test_import_and_delete_keeps_preview(tmp_path: Path):
     assert dry["dry_run"] is True
     assert original.is_file()
 
-    done = unlink_originals(cat, [shot.id], action="delete", confirm=CONFIRM_DELETE, execute=True)
+    done = unlink_originals(
+        cat, [shot.id], action="delete", confirm=CONFIRM_DELETE, execute=True, permanent=True
+    )
     assert done["count"] == 1
     assert not original.is_file()
     assert Path(shot.preview_path).is_file()
@@ -163,3 +171,145 @@ def test_identify_defaults_to_local_ollama(tmp_path: Path):
     cfg = load_config(tmp_path)
     assert cfg["backend"] == "ollama"
     assert cfg["ollama_model"] == "muse-glimmer:30b"
+
+
+# --- delete / offload safety -------------------------------------------------
+
+
+def _library_with_shots(tmp_path: Path, n: int, verdict: str = "reject"):
+    """Build a library with n imported JPEGs, all set to the given verdict."""
+    src = tmp_path / "card"
+    src.mkdir()
+    originals = []
+    for i in range(n):
+        p = src / f"DSC_{i:04d}.jpg"
+        Image.new("RGB", (80, 60), (10 * i, 80, 40)).save(p, "JPEG")
+        originals.append(p)
+    cat = Catalog(tmp_path / "library")
+    result = import_paths(cat, originals)
+    assert result["imported"] == n
+    for sid in result["ids"]:
+        cat.update(sid, verdict=verdict)
+    return cat, result["ids"], originals
+
+
+def test_dry_run_lists_every_file(tmp_path: Path):
+    """A dry run must describe all planned files -- it is what the user confirms."""
+    cat, ids, originals = _library_with_shots(tmp_path, 4)
+    dry = unlink_originals(cat, ids, action="delete", confirm=CONFIRM_DELETE, execute=False)
+    assert dry["dry_run"] is True
+    assert dry["count"] == 4
+    assert len(dry["files"]) == 4
+    assert {f["id"] for f in dry["files"]} == set(ids)
+    assert dry["bytes"] == sum(p.stat().st_size for p in originals)
+    assert all(p.is_file() for p in originals)
+
+
+def test_delete_refuses_non_rejects(tmp_path: Path):
+    cat, ids, originals = _library_with_shots(tmp_path, 2, verdict="keep")
+    dry = unlink_originals(cat, ids, action="delete", confirm=CONFIRM_DELETE, execute=False)
+    assert dry["count"] == 0
+    assert len(dry["errors"]) == 2
+    assert all("verdict" in e["error"] for e in dry["errors"])
+
+    forced = unlink_originals(
+        cat, ids, action="delete", confirm=CONFIRM_DELETE, execute=False, allow_any_verdict=True
+    )
+    assert forced["count"] == 2
+
+
+def test_offload_requires_keep_and_keeps_previews(tmp_path: Path):
+    cat, ids, originals = _library_with_shots(tmp_path, 2, verdict="keep")
+    try:
+        unlink_originals(cat, ids, action="offload", confirm=CONFIRM_DELETE, execute=True)
+        assert False, "offload must reject the delete confirm string"
+    except DiskError:
+        pass
+
+    done = unlink_originals(
+        cat, ids, action="offload", confirm=CONFIRM_OFFLOAD, execute=True, permanent=True
+    )
+    assert done["count"] == 2
+    assert not any(p.is_file() for p in originals)
+    for sid in ids:
+        shot = cat.get(sid)
+        assert shot.original_status == "offloaded"
+        assert Path(shot.preview_path).is_file()
+
+
+def test_offload_refuses_rejects(tmp_path: Path):
+    cat, ids, _ = _library_with_shots(tmp_path, 1, verdict="reject")
+    dry = unlink_originals(cat, ids, action="offload", confirm=CONFIRM_OFFLOAD, execute=False)
+    assert dry["count"] == 0
+    assert "verdict" in dry["errors"][0]["error"]
+
+
+def test_guard_refuses_catalog_files(tmp_path: Path):
+    cat, ids, _ = _library_with_shots(tmp_path, 1)
+    shot = cat.get(ids[0])
+
+    # An original that points at the preview itself.
+    cat.update(shot.id, original_path=shot.preview_path)
+    dry = unlink_originals(cat, [shot.id], action="delete", confirm=CONFIRM_DELETE, execute=False)
+    assert dry["count"] == 0
+    assert "preview" in dry["errors"][0]["error"]
+
+    # An original that points at the sqlite database.
+    cat.update(shot.id, original_path=str(cat.db_path))
+    dry = unlink_originals(cat, [shot.id], action="delete", confirm=CONFIRM_DELETE, execute=False)
+    assert dry["count"] == 0
+    assert "database" in dry["errors"][0]["error"]
+
+
+def test_guard_refuses_missing_and_already_deleted(tmp_path: Path):
+    cat, ids, originals = _library_with_shots(tmp_path, 2)
+
+    cat.update(ids[0], original_path=str(tmp_path / "gone.jpg"))
+    cat.update(ids[1], original_status="deleted")
+    dry = unlink_originals(cat, ids, action="delete", confirm=CONFIRM_DELETE, execute=False)
+    assert dry["count"] == 0
+    errors = " ".join(e["error"] for e in dry["errors"])
+    assert "missing on disk" in errors
+    assert "already deleted" in errors
+
+
+def test_unknown_id_does_not_stop_the_batch(tmp_path: Path):
+    cat, ids, originals = _library_with_shots(tmp_path, 2)
+    dry = unlink_originals(
+        cat, [ids[0], "no-such-id", ids[1]], action="delete", confirm=CONFIRM_DELETE, execute=False
+    )
+    assert dry["count"] == 2
+    assert dry["errors"] == [{"id": "no-such-id", "error": "unknown id"}]
+
+
+def test_audit_failure_does_not_report_a_failed_delete(tmp_path: Path, monkeypatch):
+    cat, ids, originals = _library_with_shots(tmp_path, 1)
+    monkeypatch.setattr(
+        "fieldcatalog.disk.audit_log",
+        lambda *a, **k: (_ for _ in ()).throw(OSError("log is read-only")),
+    )
+    done = unlink_originals(
+        cat, ids, action="delete", confirm=CONFIRM_DELETE, execute=True, permanent=True
+    )
+    assert done["count"] == 1
+    assert not originals[0].is_file()
+    assert "log is read-only" in done["audit_error"]
+
+
+def test_delete_uses_the_recycle_bin_by_default(tmp_path: Path, monkeypatch):
+    cat, ids, originals = _library_with_shots(tmp_path, 1)
+    trashed = []
+    monkeypatch.setattr("send2trash.send2trash", lambda p: trashed.append(p) or Path(p).unlink())
+    done = unlink_originals(cat, ids, action="delete", confirm=CONFIRM_DELETE, execute=True)
+    assert done["disposal"] == ["trash"]
+    assert trashed == [str(originals[0].resolve())]
+
+
+def test_pending_defaults_to_rejects_only(tmp_path: Path):
+    cat, ids, _ = _library_with_shots(tmp_path, 3)
+    cat.update(ids[0], verdict="keep")
+
+    assert len(pending(cat)) == 2
+    assert len(pending(cat, verdict="")) == 2       # empty means reject, not everything
+    assert len(pending(cat, verdict="keep")) == 1
+    assert len(pending(cat, all_verdicts=True)) == 3

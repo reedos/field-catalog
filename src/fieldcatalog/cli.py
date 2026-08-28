@@ -316,40 +316,34 @@ def cmd_bursts(ns: argparse.Namespace) -> int:
 
 def cmd_pending_deletes(ns: argparse.Namespace) -> int:
     cat = _catalog(ns)
-    items = pending(cat, verdict=ns.verdict)
+    items = pending(cat, verdict=ns.verdict, all_verdicts=ns.all)
     return _out(True, count=len(items), bytes=sum(i["bytes"] for i in items), files=items)
 
 
-def cmd_delete(ns: argparse.Namespace) -> int:
+def _unlink_cmd(ns: argparse.Namespace, action: str) -> int:
     cat = _catalog(ns)
     ids = [i.strip() for i in ns.ids.split(",") if i.strip()]
     try:
         result = unlink_originals(
             cat,
             ids,
-            action="delete",
+            action=action,
             confirm=ns.confirm or "",
             execute=ns.execute,
+            allow_any_verdict=ns.allow_any_verdict,
+            permanent=ns.permanent,
         )
     except DiskError as e:
         return _out(False, error=str(e))
     return _out(True, **result)
+
+
+def cmd_delete(ns: argparse.Namespace) -> int:
+    return _unlink_cmd(ns, "delete")
 
 
 def cmd_offload(ns: argparse.Namespace) -> int:
-    cat = _catalog(ns)
-    ids = [i.strip() for i in ns.ids.split(",") if i.strip()]
-    try:
-        result = unlink_originals(
-            cat,
-            ids,
-            action="offload",
-            confirm=ns.confirm or "",
-            execute=ns.execute,
-        )
-    except DiskError as e:
-        return _out(False, error=str(e))
-    return _out(True, **result)
+    return _unlink_cmd(ns, "offload")
 
 
 
@@ -462,24 +456,33 @@ def build_parser() -> argparse.ArgumentParser:
 
     pd = sub.add_parser("pending-deletes", help="list originals that would be unlinked")
     pd.add_argument("--verdict", default="reject")
+    pd.add_argument("--all", action="store_true", help="list every present original, not just --verdict")
     pd.set_defaults(func=cmd_pending_deletes)
 
-    dl = sub.add_parser("delete-originals", help="unlink rejected originals; previews stay")
-    dl.add_argument("--ids", required=True, help="comma-separated shot ids")
-    dl.add_argument("--confirm", default="", help=f"must be {CONFIRM_DELETE}")
-    dl.add_argument("--execute", action="store_true", help="actually unlink; omit for dry-run")
-    dl.set_defaults(func=cmd_delete)
-
-    off = sub.add_parser("offload-originals", help="unlink keepers after cloud copy; previews stay")
-    off.add_argument("--ids", required=True)
-    off.add_argument("--confirm", default="", help=f"must be {CONFIRM_OFFLOAD}")
+    for name, helptext, confirm_word, handler in (
+        ("delete-originals", "unlink rejected originals; previews stay", CONFIRM_DELETE, cmd_delete),
+        ("offload-originals", "unlink keepers after cloud copy; previews stay", CONFIRM_OFFLOAD, cmd_offload),
+    ):
+        sp = sub.add_parser(name, help=helptext)
+        sp.add_argument("--ids", required=True, help="comma-separated shot ids")
+        sp.add_argument("--confirm", default="", help=f"must be {confirm_word}")
+        sp.add_argument("--execute", action="store_true", help="actually unlink; omit for dry-run")
+        sp.add_argument(
+            "--allow-any-verdict",
+            action="store_true",
+            help="skip the verdict check (delete expects reject, offload expects keep)",
+        )
+        sp.add_argument(
+            "--permanent",
+            action="store_true",
+            help="bypass the recycle bin and unlink outright",
+        )
+        sp.set_defaults(func=handler)
 
     fm = sub.add_parser("field-marks", help="list distinct field marks")
     fm.add_argument("--limit", type=int, default=200)
     fm.set_defaults(func=cmd_field_marks)
 
-    off.add_argument("--execute", action="store_true")
-    off.set_defaults(func=cmd_offload)
     au = sub.add_parser("audit", help="read audit log")
     au.add_argument("--limit", type=int, default=200)
     au.set_defaults(func=cmd_audit)
