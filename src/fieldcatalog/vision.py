@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import base64
+import http.client
+import socket
+import threading
 import json
 import os
-import urllib.error
-import urllib.request
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .animal import infer_animal_type
 
@@ -22,6 +24,111 @@ PROMPT = (
 
 class IdentifyError(RuntimeError):
     pass
+
+
+class CancelToken:
+    """Lets another thread abort an in-flight identify by closing its socket.
+
+    urllib offers no way to interrupt a blocking read; http.client does, if you
+    hold the connection. The serve process registers the active token so a
+    fast-lane identify-cancel request can reach a slow-lane call mid-flight.
+    """
+
+    def __init__(self) -> None:
+        self._conn: http.client.HTTPConnection | None = None
+        self.cancelled = False
+
+    def attach(self, conn: http.client.HTTPConnection) -> None:
+        self._conn = conn
+        if self.cancelled:
+            self._close()
+
+    def cancel(self) -> None:
+        self.cancelled = True
+        self._close()
+
+    def _close(self) -> None:
+        conn = self._conn
+        if conn is None:
+            return
+        # On Windows, close() alone does not interrupt a recv blocked in
+        # another thread; shutdown() does.
+        sock = getattr(conn, "sock", None)
+        if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _post_json(url: str, body: dict, headers: dict, *, timeout: float, cancel: CancelToken | None) -> dict:
+    """POST and parse JSON, abortable via `cancel`.
+
+    The blocking exchange runs on a throwaway daemon thread and the caller
+    waits with cancel checks: on Windows, closing or shutting down a socket
+    does NOT reliably interrupt another thread's recv, so the only dependable
+    cancel is to stop waiting. The socket shutdown still happens best-effort
+    so the abandoned thread usually dies quickly rather than at its timeout.
+    """
+    outcome: dict = {}
+    done = threading.Event()
+
+    def work() -> None:
+        try:
+            outcome["value"] = _post_json_blocking(url, body, headers, timeout=timeout, cancel=cancel)
+        except Exception as e:  # delivered to the waiting thread
+            outcome["error"] = e
+        finally:
+            done.set()
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    while not done.wait(0.2):
+        if cancel is not None and cancel.cancelled:
+            cancel._close()
+            raise IdentifyError("identify cancelled")
+    if "error" in outcome:
+        err = outcome["error"]
+        if cancel is not None and cancel.cancelled:
+            raise IdentifyError("identify cancelled") from err
+        raise err
+    if cancel is not None and cancel.cancelled:
+        raise IdentifyError("identify cancelled")
+    return outcome["value"]
+
+
+def _post_json_blocking(url: str, body: dict, headers: dict, *, timeout: float, cancel: CancelToken | None) -> dict:
+    parts = urlsplit(url)
+    conn_cls = http.client.HTTPSConnection if parts.scheme == "https" else http.client.HTTPConnection
+    conn = conn_cls(parts.hostname or "127.0.0.1", parts.port, timeout=timeout)
+    if cancel is not None:
+        cancel.attach(conn)
+    try:
+        path = parts.path or "/"
+        if parts.query:
+            path = f"{path}?{parts.query}"
+        conn.request("POST", path, json.dumps(body).encode("utf-8"), {"Content-Type": "application/json", **headers})
+        resp = conn.getresponse()
+        status = resp.status
+        data = resp.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        if cancel is not None and cancel.cancelled:
+            raise IdentifyError("identify cancelled") from e
+        raise
+    finally:
+        conn.close()
+    if cancel is not None and cancel.cancelled:
+        raise IdentifyError("identify cancelled")
+    if status != 200:
+        raise IdentifyError(f"HTTP {status}: {data[:800]}")
+    try:
+        return json.loads(data)
+    except json.JSONDecodeError as e:
+        raise IdentifyError(f"response was not JSON: {data[:200]}") from e
 
 
 def key_path(library: Path) -> Path:
@@ -82,7 +189,9 @@ def save_config(library: Path, **fields: object) -> dict:
     return cfg
 
 
-def identify_preview(preview_path: str, *, api_key: str = "", library: Path | None = None) -> dict:
+def identify_preview(
+    preview_path: str, *, api_key: str = "", library: Path | None = None, cancel: CancelToken | None = None
+) -> dict:
     path = Path(preview_path)
     if not path.is_file():
         raise IdentifyError(f"preview missing: {path}")
@@ -92,11 +201,11 @@ def identify_preview(preview_path: str, *, api_key: str = "", library: Path | No
     b64 = base64.b64encode(raw).decode("ascii")
     cfg = load_config(library)
     if cfg["backend"] == "ollama":
-        return identify_ollama(b64, cfg)
-    return identify_xai(b64, api_key=api_key, library=library)
+        return identify_ollama(b64, cfg, cancel=cancel)
+    return identify_xai(b64, api_key=api_key, library=library, cancel=cancel)
 
 
-def identify_ollama(b64: str, cfg: dict) -> dict:
+def identify_ollama(b64: str, cfg: dict, *, cancel: CancelToken | None = None) -> dict:
     url = str(cfg.get("ollama_url") or "http://127.0.0.1:11434").rstrip("/") + "/api/chat"
     model = str(cfg.get("ollama_model") or "muse-glimmer:30b")
     body = {
@@ -113,18 +222,10 @@ def identify_ollama(b64: str, cfg: dict) -> dict:
             },
         ],
     }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")[:800]
-        raise IdentifyError(f"Ollama HTTP {e.code}: {detail}") from e
+        payload = _post_json(url, body, {}, timeout=300, cancel=cancel)
+    except IdentifyError:
+        raise
     except Exception as e:
         raise IdentifyError(f"Ollama ({model}): {e}") from e
     text = ""
@@ -136,7 +237,9 @@ def identify_ollama(b64: str, cfg: dict) -> dict:
     return parse_identity(text)
 
 
-def identify_xai(b64: str, *, api_key: str = "", library: Path | None = None) -> dict:
+def identify_xai(
+    b64: str, *, api_key: str = "", library: Path | None = None, cancel: CancelToken | None = None
+) -> dict:
     key = (api_key or load_api_key(library)).strip()
     if not key:
         raise IdentifyError("XAI_API_KEY is not set. Add it in Settings or switch Identify to local Ollama.")
@@ -155,21 +258,16 @@ def identify_xai(b64: str, *, api_key: str = "", library: Path | None = None) ->
             },
         ],
     }
-    req = urllib.request.Request(
-        "https://api.x.ai/v1/chat/completions",
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")[:800]
-        raise IdentifyError(f"xAI HTTP {e.code}: {detail}") from e
+        payload = _post_json(
+            "https://api.x.ai/v1/chat/completions",
+            body,
+            {"Authorization": f"Bearer {key}"},
+            timeout=90,
+            cancel=cancel,
+        )
+    except IdentifyError:
+        raise
     except Exception as e:
         raise IdentifyError(str(e)) from e
     try:

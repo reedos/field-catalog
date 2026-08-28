@@ -11,9 +11,6 @@
       command palette; grid has no ARIA structure and no Enter-to-open
 - [ ] Ship off this machine: `find_cli()` bakes in `CARGO_MANIFEST_DIR` at compile
       time, so the NSIS bundle only runs here. Needs a sidecar or `resources` entry.
-- [ ] Identify has no real cancellation: "Stop identify" only sets a flag checked
-      between shots, so an in-flight model call runs on. The serve worker's slow lane
-      is where a real abort would live now.
 
 ## Medium
 - [ ] Meter component: ensure gradient renders on all browsers
@@ -39,6 +36,14 @@
 - [ ] `xai.key` is written plaintext with default permissions
 
 ## Done
+- [x] Backup + doctor: `fieldcatalog backup` (rotating, WAL-safe, automatic before
+      every executed delete/offload — a failed backup aborts the delete), and
+      `fieldcatalog doctor [--fix]` for integrity, missing files, orphans, and the
+      safe backfills. Content hashes re-link moved originals at import instead of
+      orphaning their rows.
+- [x] Ctrl+Z restores verdicts, burst operations as one group
+- [x] Real identify cancellation: `identify-cancel` on the serve fast lane aborts
+      the in-flight model call; "Stop identify" now actually stops
 - [x] Compare view: survey all frames of a burst at once with synced pan/1:1 zoom,
       X culls the pool live, U restores, Enter keeps the focused frame and rejects
       the rest. Entered from a burst cell's COMPARE or the Bursts view.

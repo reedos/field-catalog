@@ -63,6 +63,41 @@ def parse_field_marks(raw: str | None) -> list[str]:
 
 _CATALOGS = threading.local()
 
+# The active identify's cancel token, shared across serve lanes. A cancel that
+# arrives moments before the identify registers is kept as `pending` briefly,
+# so "Stop" clicked as the next item starts still lands.
+_IDENTIFY = {"lock": threading.Lock(), "token": None, "pending_until": 0.0}
+
+
+def _identify_begin(token) -> bool:
+    """Register the active token. Returns False if a recent cancel is waiting."""
+    import time
+
+    with _IDENTIFY["lock"]:
+        if _IDENTIFY["pending_until"] > time.monotonic():
+            _IDENTIFY["pending_until"] = 0.0
+            return False
+        _IDENTIFY["token"] = token
+        return True
+
+
+def _identify_end() -> None:
+    with _IDENTIFY["lock"]:
+        _IDENTIFY["token"] = None
+
+
+def _identify_cancel() -> bool:
+    """Cancel the in-flight identify, or arm a short-lived pending cancel."""
+    import time
+
+    with _IDENTIFY["lock"]:
+        token = _IDENTIFY["token"]
+        if token is not None:
+            token.cancel()
+            return True
+        _IDENTIFY["pending_until"] = time.monotonic() + 5.0
+        return False
+
 
 def _catalog(ns: argparse.Namespace) -> Catalog:
     cache = getattr(_CATALOGS, "cache", None)
@@ -297,10 +332,17 @@ def cmd_identify(ns: argparse.Namespace) -> int:
         if not updated:
             return _out(False, error="unknown id")
         return _out(True, shot=shot_json(updated))
+    from .vision import CancelToken
+
+    token = CancelToken()
+    if not _identify_begin(token):
+        return _out(False, error="identify cancelled")
     try:
-        result = identify_preview(shot.preview_path, library=cat.library)
+        result = identify_preview(shot.preview_path, library=cat.library, cancel=token)
     except IdentifyError as e:
         return _out(False, error=str(e))
+    finally:
+        _identify_end()
     updated = cat.update(
         ns.id,
         common_name=result["common_name"],
@@ -312,6 +354,10 @@ def cmd_identify(ns: argparse.Namespace) -> int:
         notes=result["notes"],
     )
     return _out(True, shot=shot_json(updated) if updated else shot_json(shot))
+
+
+def cmd_identify_cancel(ns: argparse.Namespace) -> int:
+    return _out(True, cancelled=_identify_cancel())
 
 
 def cmd_set_key(ns: argparse.Namespace) -> int:
@@ -549,6 +595,9 @@ def build_parser() -> argparse.ArgumentParser:
     fm = sub.add_parser("field-marks", help="list distinct field marks")
     fm.add_argument("--limit", type=int, default=200)
     fm.set_defaults(func=cmd_field_marks)
+
+    ic = sub.add_parser("identify-cancel", help="abort the in-flight identify (serve mode)")
+    ic.set_defaults(func=cmd_identify_cancel)
 
     bk = sub.add_parser("backup", help="copy the catalog into library/backups, keeping the newest few")
     bk.set_defaults(func=cmd_backup)

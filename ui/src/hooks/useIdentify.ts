@@ -104,8 +104,10 @@ export function useIdentify(deps: {
           const res = await api.identify(shot.id);
           if (res.shot) patchShot(shot.id, normalizeShot(res.shot));
         } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (/cancelled/i.test(msg)) break; // a stop, not a failure
           failed += 1;
-          setError(e instanceof Error ? e.message : String(e));
+          setError(msg);
         }
       }
     } finally {
@@ -120,6 +122,9 @@ export function useIdentify(deps: {
     identifyingSeries,
     cancel: () => {
       cancelIdentify.current = true;
+      // Also abort the call already in flight -- the serve worker closes the
+      // model connection instead of letting it run to completion.
+      api.identifyCancel().catch(() => {});
     },
     hasXaiKey,
     xaiKeyDraft,

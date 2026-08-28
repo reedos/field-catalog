@@ -119,6 +119,8 @@ export const api = {
     return runWorker<{ shot: Shot }>(args);
   },
 
+  identifyCancel: () => runWorker<{ cancelled: boolean }>(["identify-cancel"]),
+
   setKey: (value: string) => runWorker<{ has_xai_key: boolean }>(["set-key", "--value", value]),
 
   keyStatus: () =>

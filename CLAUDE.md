@@ -45,7 +45,9 @@ These are safety invariants, not style preferences. The README and `AGENT.md` st
 3. **Never call `--execute` without first showing the dry-run `files` list.** Confirmation strings are
    exactly `DELETE_ORIGINALS` and `OFFLOAD_ORIGINALS`.
 4. The worker refuses to unlink previews, the sqlite file, or a missing original. Keep it that way.
-5. Disposal goes through the recycle bin unless `--permanent` is passed.
+5. Disposal goes through the recycle bin unless `--permanent` is passed, and an automatic
+   catalog backup precedes every `--execute` (a failed backup aborts the delete; `--no-backup`
+   overrides).
 6. Executed unlinks append a JSONL record to `<library>/audit.jsonl`. Don't bypass it.
 
 Delete expects verdict `reject`, offload expects `keep`, overridable only with `--allow-any-verdict`.

@@ -910,3 +910,90 @@ def test_doctor_reports_and_fixes(tmp_path: Path):
     assert fixed["missing_hashes"] == 0
     # Fix never deletes: the orphan is still there, only reported.
     assert (cat.previews / "orphan.jpg").is_file()
+
+
+# --- identify cancellation ---------------------------------------------------
+
+
+def test_cancel_token_unblocks_a_hung_call():
+    """Closing the socket from another thread must break the blocking read."""
+    import socket
+    import threading
+    import time
+
+    from fieldcatalog.vision import CancelToken, IdentifyError, identify_ollama
+
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)  # accepts the connect, then never responds
+    port = srv.getsockname()[1]
+
+    token = CancelToken()
+    outcome: dict = {}
+
+    def run():
+        try:
+            identify_ollama("aGk=", {"ollama_url": f"http://127.0.0.1:{port}", "ollama_model": "m"}, cancel=token)
+            outcome["error"] = "returned without error"
+        except IdentifyError as e:
+            outcome["error"] = str(e)
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    time.sleep(0.3)
+    token.cancel()
+    t.join(timeout=5)
+    srv.close()
+    assert not t.is_alive(), "cancel did not unblock the call"
+    assert "cancelled" in outcome["error"]
+
+
+def test_serve_identify_cancel_reaches_the_slow_lane(tmp_path: Path, monkeypatch):
+    """identify-cancel on the fast lane must abort an identify blocking the slow lane."""
+    import time
+
+    import fieldcatalog.vision as vision
+
+    src = tmp_path / "card"
+    src.mkdir()
+    Image.new("RGB", (60, 40), (40, 80, 40)).save(src / "a.jpg", "JPEG")
+    lib = tmp_path / "library"
+    cat = Catalog(lib)
+    sid = import_paths(cat, [src / "a.jpg"])["ids"][0]
+
+    def blocking_identify(_preview, *, library=None, cancel=None, api_key=""):
+        for _ in range(200):  # up to 10s; cancel must cut this short
+            if cancel is not None and cancel.cancelled:
+                raise vision.IdentifyError("identify cancelled")
+            time.sleep(0.05)
+        raise AssertionError("identify was never cancelled")
+
+    monkeypatch.setattr(vision, "identify_preview", blocking_identify)
+
+    start = time.monotonic()
+    responses = _serve(
+        lib,
+        [
+            {"id": 1, "args": ["identify", "--id", sid]},
+            {"id": 2, "args": ["identify-cancel"]},
+        ],
+    )
+    elapsed = time.monotonic() - start
+    by_id = {r["id"]: r for r in responses}
+    assert by_id[1]["ok"] is False and "cancelled" in by_id[1]["error"]
+    assert by_id[2]["ok"] is True
+    assert elapsed < 8, f"cancel took {elapsed:.1f}s -- it did not interrupt the call"
+
+
+def test_pending_cancel_catches_an_identify_that_just_started(tmp_path: Path):
+    from fieldcatalog.cli import _identify_begin, _identify_cancel, _identify_end
+    from fieldcatalog.vision import CancelToken
+
+    # Cancel with nothing running arms a short-lived pending cancel...
+    assert _identify_cancel() is False
+    # ...which the next identify consumes instead of starting.
+    assert _identify_begin(CancelToken()) is False
+    # And the one after that runs normally.
+    token = CancelToken()
+    assert _identify_begin(token) is True
+    _identify_end()
