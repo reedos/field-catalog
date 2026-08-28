@@ -1,4 +1,6 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessByStdio } from "node:child_process";
+import readline from "node:readline";
+import type { Readable, Writable } from "node:stream";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -25,23 +27,65 @@ function inside(rootDir: string, target: string): boolean {
   return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
 }
 
+// --- persistent serve child, mirroring the Rust side ------------------------
+// One `fieldcatalog serve` process for the whole dev session; each request is a
+// JSON line matched to its response by id. Dies? The next request respawns it.
+
+type ServeChild = ChildProcessByStdio<Writable, Readable, Readable>;
+
+let serveChild: ServeChild | null = null;
+let nextId = 1;
+const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+
+function ensureServe(): ServeChild {
+  if (serveChild && serveChild.exitCode === null) return serveChild;
+  const child = spawn(cliPath(), ["--library", libraryDir(), "serve"], {
+    windowsHide: true,
+    stdio: ["pipe", "pipe", "pipe"],
+    env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" },
+  });
+  readline.createInterface({ input: child.stdout }).on("line", (line) => {
+    let id: number | undefined;
+    try {
+      id = JSON.parse(line).id;
+    } catch {
+      return;
+    }
+    const waiter = typeof id === "number" ? pending.get(id) : undefined;
+    if (waiter) {
+      pending.delete(id!);
+      waiter.resolve(JSON.parse(line));
+    }
+  });
+  // Progress lines; the browser has no event channel, so just log them.
+  readline.createInterface({ input: child.stderr }).on("line", (line) => {
+    if (line.trim()) console.log(`[fieldcatalog] ${line}`);
+  });
+  child.on("exit", () => {
+    for (const [, waiter] of pending) waiter.reject(new Error("serve worker exited"));
+    pending.clear();
+    serveChild = null;
+  });
+  serveChild = child;
+  return child;
+}
+
 function runWorker(args: string[]): Promise<unknown> {
+  const child = ensureServe();
+  const id = nextId++;
   return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    const err: Buffer[] = [];
-    const child = spawn(cliPath(), ["--library", libraryDir(), ...args], {
-      windowsHide: true,
-    });
-    child.stdout.on("data", (d: Buffer) => chunks.push(d));
-    child.stderr.on("data", (d: Buffer) => err.push(d));
-    child.on("error", reject);
-    child.on("close", () => {
-      const text = Buffer.concat(chunks).toString("utf8").trim();
-      try {
-        resolve(JSON.parse(text));
-      } catch {
-        const stderr = Buffer.concat(err).toString("utf8").trim();
-        reject(new Error(stderr || text || "worker produced no JSON"));
+    const timer = setTimeout(() => {
+      if (pending.delete(id)) reject(new Error("serve worker timed out"));
+    }, 600_000);
+    const settle = <T,>(fn: (v: T) => void) => (v: T) => {
+      clearTimeout(timer);
+      fn(v);
+    };
+    pending.set(id, { resolve: settle(resolve), reject: settle(reject) });
+    child.stdin.write(JSON.stringify({ id, args }) + "\n", (err) => {
+      if (err && pending.delete(id)) {
+        clearTimeout(timer);
+        reject(err);
       }
     });
   });
