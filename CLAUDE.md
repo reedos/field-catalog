@@ -35,6 +35,11 @@ which lacks `send2trash`, and `test_delete_uses_the_recycle_bin_by_default` fail
 
 **Build gotcha:** close any running `field-catalog.exe` before rebuilding, or the Rust link step fails.
 
+**Installer:** `powershell -File scriptsuild-worker.ps1` builds the standalone worker
+(`src-tauriinariesieldcatalog.exe`, PyInstaller onefile), then `npm run tauri build` bundles it
+beside the app exe via the `resources` map. `find_cli()` prefers that installed copy; the dev venv is
+its last fallback. The worker exe must be rebuilt whenever the Python changes.
+
 ## Hard rules
 
 These are safety invariants, not style preferences. The README and `AGENT.md` state them too.

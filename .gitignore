@@ -12,3 +12,5 @@ xai.key
 *.key
 secrets.json
 geocode-cache.json
+src-tauri/binaries/
+build/
