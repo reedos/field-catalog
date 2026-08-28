@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Field Catalog",
+  "version": "0.1.0",
+  "identifier": "com.fieldcatalog.desktop",
+  "build": {
+    "beforeDevCommand": "cmd /c npm --prefix ui run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "cmd /c npm --prefix ui run build",
+    "frontendDist": "../ui/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Field Catalog",
+        "width": 1440,
+        "height": 920,
+        "minWidth": 960,
+        "minHeight": 640
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https://asset.localhost blob: data: https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost https://*.tile.openstreetmap.org; font-src 'self' data:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/256x256.png",
+      "icons/icon.ico"
+    ]
+  }
+}
