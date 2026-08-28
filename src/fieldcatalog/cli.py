@@ -34,6 +34,22 @@ def _stderr_progress(label: str, every: int = 50):
     return progress
 
 
+def parse_field_marks(raw: str | None) -> list[str]:
+    """Split a field-marks string.
+
+    Pipes and newlines always separate. Commas separate too, but only when no
+    pipe is present, so a mark that contains a comma can still be written as
+    "white eyering, thin|chestnut nape".
+    """
+    if not raw:
+        return []
+    if "|" in raw or "\n" in raw:
+        parts = raw.replace("\n", "|").split("|")
+    else:
+        parts = raw.split(",")
+    return [p.strip() for p in parts if p.strip()]
+
+
 def _catalog(ns: argparse.Namespace) -> Catalog:
     return Catalog(Path(ns.library))
 
@@ -151,10 +167,7 @@ def cmd_set(ns: argparse.Namespace) -> int:
     if ns.animal_type is not None:
         fields["animal_type"] = ns.animal_type
     if ns.field_marks is not None:
-        marks = [m.strip() for m in ns.field_marks.replace("\n", "|").split("|") if m.strip()]
-        if "," in ns.field_marks and "|" not in ns.field_marks:
-            marks = [m.strip() for m in ns.field_marks.split(",") if m.strip()]
-        fields["field_marks"] = json.dumps(marks)
+        fields["field_marks"] = json.dumps(parse_field_marks(ns.field_marks))
     if not fields:
         return _out(False, error="nothing to set")
     shot = cat.update(ns.id, **fields)
@@ -230,7 +243,7 @@ def cmd_identify(ns: argparse.Namespace) -> int:
         return _out(False, error="unknown id")
     if ns.common_name:
         animal = ns.animal_type or infer_animal_type(ns.common_name, ns.scientific_name)
-        marks = [m.strip() for m in (ns.field_marks or "").replace("\n", "|").split("|") if m.strip()]
+        marks = parse_field_marks(ns.field_marks)
         fields: dict[str, object] = {
             "common_name": ns.common_name,
             "scientific_name": ns.scientific_name or None,

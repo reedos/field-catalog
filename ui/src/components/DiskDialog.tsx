@@ -19,6 +19,10 @@ export default function DiskDialog(props: {
   const count = props.dryRun?.count ?? 0;
   const bytes = props.dryRun?.bytes ?? 0;
   const errors = props.dryRun?.errors || [];
+  // Thousands of rejects would mean thousands of DOM rows. The count and total
+  // above are what the confirm is really about; the table is a spot check.
+  const MAX_ROWS = 200;
+  const shown = files.slice(0, MAX_ROWS);
   const ready =
     !props.busy &&
     count > 0 &&
@@ -51,7 +55,7 @@ export default function DiskDialog(props: {
               </tr>
             </thead>
             <tbody>
-              {files.map((f) => (
+              {shown.map((f) => (
                 <tr key={f.id} className="border-t border-paper-dim align-top">
                   <td className="py-1 break-all">{f.path || f.original_path}</td>
                   <td className="whitespace-nowrap">{fmtBytes(f.bytes || 0)}</td>
@@ -60,6 +64,12 @@ export default function DiskDialog(props: {
               ))}
             </tbody>
           </table>
+          {files.length > shown.length ? (
+            <p className="mt-2 text-xs text-bark">
+              Showing the first {shown.length} of {files.length} files. All {files.length} will be
+              unlinked.
+            </p>
+          ) : null}
           {errors.length ? (
             <ul className="mt-3 text-sm text-reject">
               {errors.map((e) => (

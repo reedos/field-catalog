@@ -608,3 +608,17 @@ def test_list_limit_reaches_sql_and_counts_are_aggregates(tmp_path: Path):
 
     empty = Catalog(tmp_path / "empty")
     assert empty.counts() == (0, {}, {})
+
+
+def test_field_marks_split_the_same_way_everywhere():
+    """`set` and `identify` used to parse this field with different rules."""
+    from fieldcatalog.cli import parse_field_marks
+
+    assert parse_field_marks("black bib, chestnut nape") == ["black bib", "chestnut nape"]
+    assert parse_field_marks("black bib|chestnut nape") == ["black bib", "chestnut nape"]
+    assert parse_field_marks("black bib\nchestnut nape") == ["black bib", "chestnut nape"]
+    # A pipe present means commas are part of the mark, not separators.
+    assert parse_field_marks("white eyering, thin|black bib") == ["white eyering, thin", "black bib"]
+    assert parse_field_marks("") == []
+    assert parse_field_marks(None) == []
+    assert parse_field_marks("  ,, ") == []
