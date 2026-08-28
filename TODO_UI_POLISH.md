@@ -1,30 +1,19 @@
 # Field Catalog Desktop — TODO / Backlog
 
 ## High value, pending
-- [ ] Back button / history navigation: restore previous view + state (e.g., life list → library filter → back to life list at same scroll position)
-- [ ] Library thumbnails orientation + size: display photos in actual orientation (landscape/portrait) and increase thumbnail size in grid
-- [ ] Detail view as scrollable side panel: open photo in side panel like screenshot, keep grid visible behind, not full-screen modal
-- [ ] Mass add location info by date: bulk set location label for all photos captured on a specific day
-- [ ] Bursts navigation: prevent auto-exit back to library after finishing bursts; stay in bursts view with updated state
-- [ ] Burst photo ordering: ensure shots within a burst are ordered chronologically so “next” moves sequentially through burst
-- [ ] Verdict button real-time update: Keep/Reject/Unrated button state updates immediately after press, no wait for next photo
-- [ ] Wire `/api/field-marks` in Tauri backend to `Catalog.distinct_field_marks`; connect Detail datalist to live suggestions and add “Add field mark” button
-- [ ] Wire `/api/field-marks` in Tauri backend to `Catalog.distinct_field_marks`; connect Detail datalist to live suggestions and add “Add field mark” button
-- [ ] Import flow with folder picker → `import --source` with progress streaming from stderr
 - [ ] Pending-deletes quick view: show count in Toolbar badge, open dry-run dialog directly
-- [ ] Disk audit UI viewer fully functional: implement `/api/audit` Tauri route, read `library/audit.jsonl`, show in modal
-- [ ] Burst pick UI polish: recommended keep per burst, compare view, bulk apply verdicts
-- [ ] Map place-name edit save via `set-location` without moving GPS
-- [ ] Settings: persist custom keymaps, backend selection, Ollama model
+- [ ] Burst pick UI polish: compare view, bulk apply verdicts
+- [ ] Map place-name edit save via `set-location` without moving GPS (`PinCard` in `MapView.tsx` is written but never rendered)
 - [ ] Grid performance: item virtualizer tuning + preload next rows
-- [ ] Disk audit log helper: ensure `audit_log` writes on every unlink, test with delete/offload
+- [ ] Forward button never enables: `pushHistory` always leaves `historyIndex` at `length-1`, and the 16-entry trim shifts indices without adjusting it
+- [ ] "Pending" toolbar button is a duplicate of "Delete rejected" — give it its own handler or remove it
+- [ ] Accessibility pass: no `role="dialog"` / focus trap on any modal; `text-paper-dim` on `bg-paper` is unreadable in the shortcuts overlay and command palette
+- [ ] Ship off this machine: `find_cli()` bakes in `CARGO_MANIFEST_DIR` at compile time, so the NSIS bundle only runs here. Needs a sidecar or `resources` entry.
 
 ## Medium
-- [ ] Keyboard cheat-sheet overlay: add missing shortcuts, make it toggleable
 - [ ] Meter component: ensure gradient renders on all browsers
-- [ ] Field marks suggestions: debounce input, show top 5
-- [ ] Life list: add counts per species, filter by verdict
-- [ ] Refresh previews progress indicator
+- [ ] Life list: filter by verdict (counts per species are already shown)
+- [ ] `list` supports `--limit` and `truncated`, but `api.list()` never passes it — decide whether to paginate
 
 ## Low / Nice-to-have
 - [ ] Dark mode toggle
@@ -34,5 +23,26 @@
 
 ## Bugs
 - [ ] Vite dev deps install reliably on Windows
-- [ ] SCHEMA triple-quote was missing — fixed
-- [ ] Ensure `fieldcatalog audit` returns JSON with `entries` field
+- [ ] Import dedupe is path-based, so a moved or renamed original re-imports as a new shot and orphans the old row
+- [ ] `preview.py` minimum-preview-size check is inert (`return best if best and len(best) > 20_000 else best` — both branches return `best`), so a tiny embedded thumbnail is accepted as the preview
+- [ ] `parse_exif` is `_exiftool(path) or _pil(path)`, and `_exiftool` always returns a truthy dict, so the PIL fallback is unreachable whenever exiftool is on PATH
+- [ ] `importer.py` re-parses EXIF from the preview it just wrote, but `write_preview` saves no EXIF, so that fallback can never recover anything
+
+## Done
+- [x] Back button / history navigation
+- [x] Library thumbnails orientation + size
+- [x] Detail view as scrollable side panel
+- [x] Mass add location info by date
+- [x] Bursts navigation stays in the bursts view
+- [x] Burst photo ordering is chronological
+- [x] Verdict button real-time update
+- [x] Import folder picker
+- [x] Disk audit UI viewer + `audit` command returning `entries`
+- [x] Settings: persist custom keymaps, backend selection, Ollama model
+- [x] Refresh previews progress indicator
+- [x] SCHEMA triple-quote (commit `ab8588c`)
+- [x] Field marks suggestions: debounced, sourced from the catalog via the `field-marks` command, rendered as clickable chips (a `<textarea>` cannot use a `<datalist>`, which is why the old scaffolding never appeared)
+- [x] Import progress streaming from stderr
+- [x] `audit_log` writes on every executed unlink, is guarded so a log failure cannot report a successful delete as failed, and is covered by tests
+- [x] Keyboard cheat-sheet overlay closes on Escape and no longer leaks cull keys to the shot behind it
+- [x] Loupe key actually renders a 1:1 view with drag-to-pan
