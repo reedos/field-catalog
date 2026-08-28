@@ -14,6 +14,7 @@ export type ViewState = {
   verdict: Verdict | "";
   needsId: boolean;
   sort: SortKey;
+  day: string; // "" = all outings; else a capture day, YYYY-MM-DD
 };
 
 export interface Shot {

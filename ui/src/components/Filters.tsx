@@ -1,3 +1,4 @@
+import { fmtDay } from "../lib/format";
 import type { ReactNode, RefObject } from "react";
 import { ANIMAL_TYPES, type AnimalType, type SortKey, type Verdict } from "../types";
 
@@ -16,6 +17,9 @@ export default function Filters(props: {
   onStarsMin: (v: number) => void;
   verdict: Verdict | "";
   onVerdict: (v: Verdict | "") => void;
+  day: string;
+  outings: { day: string; count: number; unrated: number }[];
+  onDay: (v: string) => void;
   sort: SortKey;
   onSort: (v: SortKey) => void;
 }) {
@@ -41,6 +45,19 @@ export default function Filters(props: {
           </Pill>
         ))}
       </div>
+      <select
+        value={props.day}
+        onChange={(e) => props.onDay(e.target.value)}
+        className="fc-select"
+        aria-label="Outing"
+      >
+        <option value="">All outings</option>
+        {props.outings.map((o) => (
+          <option key={o.day} value={o.day}>
+            {fmtDay(o.day)} · {o.count}{o.unrated ? ` (${o.unrated} unrated)` : ""}
+          </option>
+        ))}
+      </select>
       <select
         value={props.location}
         onChange={(e) => props.onLocation(e.target.value)}

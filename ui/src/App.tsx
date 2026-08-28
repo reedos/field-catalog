@@ -44,6 +44,7 @@ export default function App() {
   const deferredSearch = useDeferredValue(search);
   const [animal, setAnimal] = useState<AnimalType | "">("");
   const [location, setLocation] = useState("");
+  const [day, setDay] = useState("");
   const [starsMin, setStarsMin] = useState(0);
   const [verdict, setVerdictFilter] = useState<Verdict | "">("");
   const [needsId, setNeedsId] = useState(false);
@@ -82,7 +83,7 @@ export default function App() {
   const [showBulkLocation, setShowBulkLocation] = useState(false);
 
   // The composite view state, as one value, for history and the palette.
-  const currentViewState: ViewState = { view, search, animal, location, starsMin, verdict, needsId, sort };
+  const currentViewState: ViewState = { view, search, animal, location, starsMin, verdict, needsId, sort, day };
 
   function applyState(state: ViewState) {
     setView(state.view);
@@ -93,6 +94,7 @@ export default function App() {
     setVerdictFilter(state.verdict);
     setNeedsId(state.needsId);
     setSort(state.sort);
+    setDay(state.day ?? ""); // states recorded before outings existed lack it
   }
 
   const nav = useViewHistory(currentViewState, applyState);
@@ -119,6 +121,21 @@ export default function App() {
     return () => unlisten?.();
   }, [reload]);
 
+  const outings = useMemo(() => {
+    const byDay = new Map<string, { count: number; unrated: number }>();
+    for (const s of shots) {
+      const d = (s.captured_at || "").slice(0, 10);
+      if (!d) continue;
+      const cur = byDay.get(d) || { count: 0, unrated: 0 };
+      cur.count += 1;
+      if (s.verdict === "unrated") cur.unrated += 1;
+      byDay.set(d, cur);
+    }
+    return [...byDay.entries()]
+      .map(([d, v]) => ({ day: d, ...v }))
+      .sort((a, b) => b.day.localeCompare(a.day));
+  }, [shots]);
+
   const locations = useMemo(() => {
     const set = new Set<string>();
     for (const s of shots) {
@@ -144,6 +161,7 @@ export default function App() {
     let rows = shots.filter((s) => {
       if (needsId && (s.common_name || s.scientific_name)) return false;
       if (animal && s.animal_type !== animal) return false;
+      if (day && (s.captured_at || "").slice(0, 10) !== day) return false;
       if (location === "__none__" && s.location) return false;
       if (location && location !== "__none__" && s.location !== location) return false;
       if (starsMin && (s.stars || 0) < starsMin) return false;
@@ -167,7 +185,7 @@ export default function App() {
       return -c || a.id.localeCompare(b.id);
     });
     return rows;
-  }, [shots, animal, location, starsMin, verdict, deferredSearch, sort, needsId]);
+  }, [shots, animal, location, starsMin, verdict, deferredSearch, sort, needsId, day]);
 
   const selected = selectedId ? shotsById.get(selectedId) : undefined;
   const burstMembers = useMemo(() => {
@@ -195,6 +213,13 @@ export default function App() {
           a.id.localeCompare(b.id),
       );
   }, [shots, compareBurstId]);
+
+  function cullOuting(d: string) {
+    setDay(d);
+    setVerdictFilter("unrated");
+    setView("library");
+    nav.record({ day: d, verdict: "unrated", view: "library" });
+  }
 
   function openCompare(burstId: string | null | undefined) {
     if (!burstId) return;
@@ -619,6 +644,12 @@ const verdicts = useMemo(() => {
             setStarsMin(v);
             nav.record({ starsMin: v });
           }}
+          day={day}
+          outings={outings}
+          onDay={(v) => {
+            setDay(v);
+            nav.record({ day: v });
+          }}
           verdict={verdict}
           onVerdict={(v) => {
             setVerdictFilter(v);
@@ -661,6 +692,8 @@ const verdicts = useMemo(() => {
               onKeepThis={(id) => void keepThis(id)}
               onKeepPick={(bid) => void keepPick(bid)}
               onCompare={(id) => openCompare(shotsById.get(id)?.burst_id)}
+              grouped={sort === "captured_at" && !day}
+              onCullDay={cullOuting}
             />
           ) : (
             <div className="p-8 text-paper-dim font-serif">Loading library…</div>

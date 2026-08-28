@@ -35,3 +35,13 @@ export function sharpnessMeter(shot: { sharpness: number | null; quality: number
   if (shot.sharpness == null) return null;
   return Math.max(0, Math.min(1, shot.sharpness / 150));
 }
+
+export function fmtDay(day: string): string {
+  const d = new Date(`${day}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return day || "Undated";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+export function captureDay(capturedAt: string | null | undefined): string {
+  return (capturedAt || "").slice(0, 10);
+}

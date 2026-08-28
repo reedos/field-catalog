@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Shot } from "../types";
-import { focusScore, starsLabel } from "../lib/format";
+import { captureDay, fmtDay, focusScore, starsLabel } from "../lib/format";
 import { previewUrl } from "../lib/preview";
 
 const GAP = 8;
@@ -21,10 +21,52 @@ export interface BurstMeta {
   memberIds: string[];
 }
 
-type PackedRow = {
+type PhotoRow = {
+  kind: "photos";
   items: { shot: Shot; width: number }[];
   height: number;
 };
+
+type HeaderRow = {
+  kind: "header";
+  day: string;
+  count: number;
+  unrated: number;
+  location: string;
+  height: number;
+};
+
+type PackedRow = PhotoRow | HeaderRow;
+
+const HEADER_H = 44;
+
+/** Consecutive same-day runs; the default sort is capture date, so runs = outings. */
+function sections(shots: Shot[]): { day: string; shots: Shot[] }[] {
+  const out: { day: string; shots: Shot[] }[] = [];
+  for (const shot of shots) {
+    const day = captureDay(shot.captured_at);
+    const last = out[out.length - 1];
+    if (last && last.day === day) last.shots.push(shot);
+    else out.push({ day, shots: [shot] });
+  }
+  return out;
+}
+
+function commonLocation(shots: Shot[]): string {
+  const counts = new Map<string, number>();
+  for (const s of shots) {
+    if (s.location) counts.set(s.location, (counts.get(s.location) || 0) + 1);
+  }
+  let best = "";
+  let bestN = 0;
+  for (const [loc, n] of counts) {
+    if (n > bestN) {
+      best = loc;
+      bestN = n;
+    }
+  }
+  return best;
+}
 
 /** Target row height, blending taller as the row's mean aspect goes portrait. */
 function rowTarget(meanAr: number): number {
@@ -34,9 +76,31 @@ function rowTarget(meanAr: number): number {
   return Math.round(TARGET_H + (PORTRAIT_TARGET_H - TARGET_H) * t);
 }
 
-function packRows(shots: Shot[], containerWidth: number, aspects: Map<string, number>): PackedRow[] {
+function packRows(
+  shots: Shot[],
+  containerWidth: number,
+  aspects: Map<string, number>,
+  grouped: boolean,
+): PackedRow[] {
   const inner = Math.max(240, containerWidth - 16);
-  const rows: PackedRow[] = [];
+  if (grouped) {
+    return sections(shots).flatMap((sec) => [
+      {
+        kind: "header" as const,
+        day: sec.day,
+        count: sec.shots.length,
+        unrated: sec.shots.filter((s) => s.verdict === "unrated").length,
+        location: commonLocation(sec.shots),
+        height: HEADER_H,
+      },
+      ...packPhotoRows(sec.shots, inner, aspects),
+    ]);
+  }
+  return packPhotoRows(shots, inner, aspects);
+}
+
+function packPhotoRows(shots: Shot[], inner: number, aspects: Map<string, number>): PhotoRow[] {
+  const rows: PhotoRow[] = [];
   let buf: { shot: Shot; ar: number }[] = [];
   let arSum = 0;
 
@@ -45,6 +109,7 @@ function packRows(shots: Shot[], containerWidth: number, aspects: Map<string, nu
     const maxH = mean < 1 ? 760 : 560;
     const h = Math.min(maxH, Math.max(200, height));
     rows.push({
+      kind: "photos",
       height: h,
       items: items.map((it) => ({ shot: it.shot, width: it.ar * h })),
     });
@@ -83,6 +148,8 @@ export default function Grid(props: {
   onKeepThis: (id: string) => void;
   onKeepPick: (burstId: string) => void;
   onCompare: (id: string) => void;
+  grouped?: boolean;
+  onCullDay?: (day: string) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1200);
@@ -112,14 +179,18 @@ export default function Grid(props: {
   }, []);
 
   const rows = useMemo(
-    () => packRows(props.shots, width, aspects),
-    [props.shots, width, aspects],
+    () => packRows(props.shots, width, aspects, !!props.grouped),
+    [props.shots, width, aspects, props.grouped],
   );
 
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: (i) => (rows[i]?.height ?? TARGET_H) + CAPTION_H + GAP,
+    estimateSize: (i) => {
+      const row = rows[i];
+      if (!row) return TARGET_H + CAPTION_H + GAP;
+      return row.kind === "header" ? row.height + GAP : row.height + CAPTION_H + GAP;
+    },
     overscan: 6,
   });
 
@@ -136,7 +207,8 @@ export default function Grid(props: {
     lastScrolledTo.current = props.selectedId;
     let rowIndex = -1;
     for (let i = 0; i < rows.length; i++) {
-      if (rows[i].items.some((it) => it.shot.id === props.selectedId)) {
+      const row = rows[i];
+      if (row.kind === "photos" && row.items.some((it) => it.shot.id === props.selectedId)) {
         rowIndex = i;
         break;
       }
@@ -178,6 +250,32 @@ export default function Grid(props: {
         {virtualizer.getVirtualItems().map((vRow) => {
           const row = rows[vRow.index];
           if (!row) return null;
+          if (row.kind === "header") {
+            return (
+              <div
+                key={vRow.key}
+                className="absolute left-0 flex items-baseline gap-3 px-4"
+                style={{ transform: `translateY(${vRow.start}px)`, height: row.height, width: "100%" }}
+              >
+                <div className="font-serif text-base tracking-wide text-paper">{fmtDay(row.day)}</div>
+                <div className="text-xs text-paper-dim">
+                  {row.count} shot{row.count === 1 ? "" : "s"}
+                  {row.unrated ? ` · ${row.unrated} unrated` : " · culled"}
+                  {row.location ? ` · ${row.location}` : ""}
+                </div>
+                {row.unrated && props.onCullDay ? (
+                  <button
+                    type="button"
+                    className="text-xs text-moss transition-colors hover:text-paper"
+                    onClick={() => props.onCullDay?.(row.day)}
+                  >
+                    Cull this outing →
+                  </button>
+                ) : null}
+                <div className="mb-1 flex-1 self-end border-b border-bark/60" />
+              </div>
+            );
+          }
           return (
             <div
               key={vRow.key}

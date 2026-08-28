@@ -24,7 +24,8 @@ export function sameState(a: ViewState, b: ViewState): boolean {
     a.starsMin === b.starsMin &&
     a.verdict === b.verdict &&
     a.needsId === b.needsId &&
-    a.sort === b.sort
+    a.sort === b.sort &&
+    (a.day || "") === (b.day || "")
   );
 }
 
@@ -57,6 +58,7 @@ export function historyLabel(s: ViewState): string {
     settings: "Settings",
   };
   const bits = [names[s.view] || s.view];
+  if (s.day) bits.push(s.day);
   if (s.search) bits.push(s.search);
   else if (s.animal) bits.push(s.animal);
   else if (s.location) bits.push(s.location);
