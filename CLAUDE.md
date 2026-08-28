@@ -12,7 +12,7 @@ Library data lives at `~/FieldCatalog/`: `catalog.sqlite`, `previews/{id}.jpg`, 
 ## Commands
 
 ```
-./.venv/Scripts/python.exe -m pytest -q      # 37 tests, all passing as of 2026-08-28
+./.venv/Scripts/python.exe -m pytest -q      # the full suite must pass
 pip install -e ".[dev]"                      # ".[raw]" adds rawpy for NEF thumbnails
 npm install && npm --prefix ui install
 npm run tauri -- dev             # full desktop app
