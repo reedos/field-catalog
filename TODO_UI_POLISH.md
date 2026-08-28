@@ -2,8 +2,6 @@
 
 ## High value, pending
 - [ ] Pending-deletes quick view: show count in Toolbar badge, open dry-run dialog directly
-- [ ] Grid performance: virtualizer preload tuning (dimensions are stored now, so the
-      layout no longer reflows; this is only about prefetching the next rows)
 - [ ] "Pending" toolbar button is a duplicate of "Delete rejected" — give it its own
       handler or remove it
 - [ ] Accessibility pass: no `role="dialog"` or focus trap on any modal;
@@ -21,6 +19,7 @@
             Adds a build step and roughly 40-80 MB to the installer.
 
 ## Medium
+- [ ] Outing headers could show a per-outing keep/reject summary once culled
 - [ ] Meter component: ensure gradient renders on all browsers
 - [ ] Life list: filter by verdict (counts per species are already shown)
 - [ ] `api.list()` still fetches every row. `--limit` and `truncated` work now, so
@@ -33,7 +32,6 @@
 
 ## Low / Nice-to-have
 - [ ] Dark mode toggle
-- [ ] Export catalog CSV
 - [ ] Thumbnail generation for bursts
 - [ ] Cloud offload confirmation checklist
 
@@ -44,6 +42,15 @@
 - [ ] `xai.key` is written plaintext with default permissions
 
 ## Done
+- [x] Outings: capture-day headers in the grid with cull-this-outing, a day filter
+      in the filter bar, day as part of view history
+- [x] Preview prefetch around the selection; compare view badges the recommended pick
+- [x] Life list as an achievement page: best frame per species, first-seen plate
+      numbering, per-type counts (the Museum Plate direction's second life)
+- [x] Export keepers: originals copied to a chosen folder with metadata.csv
+      (includes the old "export catalog CSV" idea)
+- [x] Installability: find_cli prefers installed layouts, PyInstaller standalone
+      worker (scripts/build-worker.ps1), bundled via the resources map
 - [x] Backup + doctor: `fieldcatalog backup` (rotating, WAL-safe, automatic before
       every executed delete/offload — a failed backup aborts the delete), and
       `fieldcatalog doctor [--fix]` for integrity, missing files, orphans, and the
