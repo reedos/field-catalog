@@ -1,5 +1,5 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { open, confirm as nativeConfirm } from "@tauri-apps/plugin-dialog";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import Bursts from "./components/Bursts";
 import AuditLog from "./components/AuditLog";
 import Detail from "./components/Detail";
@@ -13,16 +13,17 @@ import Toolbar from "./components/Toolbar";
 import ShortcutsOverlay from "./components/ShortcutsOverlay";
 import CommandPalette from "./components/CommandPalette";
 import BulkLocationModal from "./components/BulkLocationModal";
-import { fmtBytes } from "./lib/format";
 import { isTypingTarget, loadKeys, matches, saveKeys } from "./lib/keys";
 import { isTauri } from "./lib/preview";
 import { api, onWorkerProgress } from "./lib/worker";
 import { useViewHistory } from "./hooks/useViewHistory";
+import { normalizeShot, useShots } from "./hooks/useShots";
+import { useDiskFlow } from "./hooks/useDiskFlow";
+import { useIdentify } from "./hooks/useIdentify";
 import {
   COLOR_CYCLE,
   type AnimalType,
   type BurstPick,
-  type DiskResult,
   type Keymap,
   type Shot,
   type SortKey,
@@ -33,7 +34,6 @@ import {
 
 export default function App() {
   const [ready, setReady] = useState(false);
-  const [shots, setShots] = useState<Shot[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState(false);
   const [loupe, setLoupe] = useState(false);
@@ -41,7 +41,6 @@ export default function App() {
   const [search, setSearch] = useState("");
   // The input stays responsive; the 3500-row filter + sort yields to it.
   const deferredSearch = useDeferredValue(search);
-  const [catalogFieldMarks, setCatalogFieldMarks] = useState<string[]>([]);
   const [animal, setAnimal] = useState<AnimalType | "">("");
   const [location, setLocation] = useState("");
   const [starsMin, setStarsMin] = useState(0);
@@ -50,23 +49,30 @@ export default function App() {
   const [sort, setSort] = useState<SortKey>("captured_at");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+
+  function fail(e: unknown) {
+    setError(e instanceof Error ? e.message : String(e));
+  }
+
+  const { shots, shotsById, catalogFieldMarks, reload, patchShot, optimistic } = useShots(fail);
+
+  const diskFlow = useDiskFlow({
+    shots,
+    reload,
+    setBusy,
+    setError,
+    closeDetail: () => setDetail(false),
+  });
+  const { disk, setDisk } = diskFlow;
+
+  const identify = useIdentify({ patchShot, setSelectedId, setBusy, setError });
   const [keys, setKeys] = useState<Keymap>(loadKeys);
   const [bursts, setBursts] = useState<BurstPick[]>([]);
   const [paths, setPaths] = useState({ cli: "", library: "" });
-  const [disk, setDisk] = useState<null | { kind: "delete" | "offload"; dryRun: DiskResult | null }>(null);
   const [audit, setAudit] = useState<{ts:string;action:string;count:number;bytes:number}[]>([]);
   const [auditOpen, setAuditOpen] = useState(false);
-  const [confirmTyped, setConfirmTyped] = useState("");
-  const [cloudOk, setCloudOk] = useState(false);
   const [burstReviewId, setBurstReviewId] = useState<string | null>(null);
-  const [identifying, setIdentifying] = useState(false);
-  const [identifyingSeries, setIdentifyingSeries] = useState(false);
   const [pickedIds, setPickedIds] = useState<Set<string>>(() => new Set());
-  const cancelIdentify = useRef(false);
-  const [hasXaiKey, setHasXaiKey] = useState(false);
-  const [xaiKeyDraft, setXaiKeyDraft] = useState("");
-  const [identifyBackend, setIdentifyBackend] = useState<"ollama" | "xai">("ollama");
-  const [ollamaModel, setOllamaModel] = useState("muse-glimmer:30b");
   const searchRef = useRef<HTMLInputElement>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
@@ -88,15 +94,6 @@ export default function App() {
 
   const nav = useViewHistory(currentViewState, applyState);
 
-  const reload = useCallback(async () => {
-    const listed = await api.list();
-    setShots((listed.shots || []).map(normalizeShot));
-    // Suggestion vocabulary is a nice-to-have; never fail a reload over it.
-    api.fieldMarks()
-      .then((res) => setCatalogFieldMarks(res.marks || []))
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     onWorkerProgress((line) => setBusy(line)).then((fn) => {
@@ -107,10 +104,7 @@ export default function App() {
         setBusy("Opening library…");
         setPaths(await api.paths());
         await api.init();
-        const key = await api.keyStatus();
-        setHasXaiKey(!!key.has_xai_key);
-        if (key.backend === "xai" || key.backend === "ollama") setIdentifyBackend(key.backend);
-        if (key.ollama_model) setOllamaModel(key.ollama_model);
+        await identify.loadKeyStatus();
         await reload();
         setReady(true);
       } catch (e) {
@@ -172,7 +166,6 @@ export default function App() {
     return rows;
   }, [shots, animal, location, starsMin, verdict, deferredSearch, sort, needsId]);
 
-  const shotsById = useMemo(() => new Map(shots.map((s) => [s.id, s])), [shots]);
   const selected = selectedId ? shotsById.get(selectedId) : undefined;
   const burstMembers = useMemo(() => {
     if (!burstReviewId) return [];
@@ -197,35 +190,6 @@ export default function App() {
     }
     return meta;
   }, [shots]);
-
-  function patchShot(id: string, partial: Partial<Shot>) {
-    setShots((prev) => prev.map((s) => (s.id === id ? { ...s, ...partial } : s)));
-  }
-
-  /** Apply one patch per id in a single pass, instead of cloning the list per id. */
-  function patchShots(patches: Map<string, Partial<Shot>>) {
-    if (!patches.size) return;
-    setShots((prev) => prev.map((s) => (patches.has(s.id) ? { ...s, ...patches.get(s.id)! } : s)));
-  }
-
-  function fail(e: unknown) {
-    setError(e instanceof Error ? e.message : String(e));
-  }
-
-  /** Optimistic write that puts the previous values back if the worker rejects it. */
-  function optimistic(patches: Map<string, Partial<Shot>>, call: () => Promise<unknown>) {
-    const rollback = new Map<string, Partial<Shot>>();
-    for (const [id, partial] of patches) {
-      const cur = shotsById.get(id);
-      if (!cur) continue;
-      rollback.set(id, Object.fromEntries(Object.keys(partial).map((k) => [k, (cur as any)[k]])));
-    }
-    patchShots(patches);
-    return call().catch((e) => {
-      patchShots(rollback);
-      fail(e);
-    });
-  }
 
   async function setVerdictOnly(id: string, v: Verdict) {
     await optimistic(new Map([[id, { verdict: v }]]), () => api.setVerdict(id, v));
@@ -294,19 +258,6 @@ export default function App() {
     }
   }
 
-  async function runIdentify(id: string) {
-    setIdentifying(true);
-    setError("");
-    try {
-      const res = await api.identify(id);
-      if (res.shot) patchShot(id, normalizeShot(res.shot));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setIdentifying(false);
-    }
-  }
-
   function pickShot(id: string, e: MouseEvent) {
     if (e.ctrlKey || e.metaKey) {
       setPickedIds((prev) => {
@@ -330,53 +281,6 @@ export default function App() {
     }
     setSelectedId(id);
     setPickedIds(new Set());
-  }
-
-  async function runIdentifySeries() {
-    const picked = filtered.filter((s) => pickedIds.has(s.id));
-    const queue = picked.length
-      ? picked
-      : filtered.filter((s) => !s.common_name);
-    // Confidence gate: skip already high confidence
-    const gated = queue.filter(s => {
-      const conf = s.confidence;
-      if (conf == null) return true;
-      const c = conf > 1 ? conf / 100 : conf;
-      return c < 0.9;
-    });
-    if (!gated.length) {
-      setError("Nothing to identify. Ctrl+click shots, or filter to Needs ID.");
-      return;
-    }
-    const label = picked.length
-      ? `Identify ${gated.length} selected shot(s) in series?`
-      : `Identify ${gated.length} unlabeled shot(s) in the current view, one at a time?`;
-    const ok = window.confirm(`${label}\nNot automatic on import. Stop anytime.`);
-    if (!ok) return;
-    cancelIdentify.current = false;
-    setIdentifyingSeries(true);
-    setIdentifying(true);
-    setError("");
-    let failed = 0;
-    try {
-      for (let i = 0; i < gated.length; i++) {
-        if (cancelIdentify.current) break;
-        const shot = gated[i];
-        setSelectedId(shot.id);
-        setBusy(`Identify ${i + 1}/${gated.length}`);
-        try {
-          const res = await api.identify(shot.id);
-          if (res.shot) patchShot(shot.id, normalizeShot(res.shot));
-        } catch (e) {
-          failed += 1;
-          setError(e instanceof Error ? e.message : String(e));
-        }
-      }
-    } finally {
-      setIdentifying(false);
-      setIdentifyingSeries(false);
-      setBusy(failed ? `Identify stopped · ${failed} failed` : "");
-    }
   }
 
   async function setAnimalType(id: string, t: AnimalType) {
@@ -569,94 +473,6 @@ export default function App() {
     }
   }
 
-  async function openDelete() {
-    setBusy("Listing rejected originals…");
-    setError("");
-    setDetail(false);
-    try {
-      const pending = await api.pendingDeletes("reject");
-      if (!pending.count || !pending.files?.length) {
-        setError("No rejected originals still on disk.");
-        return;
-      }
-      const ids = pending.files.map((f) => f.id).filter(Boolean);
-      // The dry run is the list the user confirms and the list we execute. If it
-      // fails there is nothing safe to show, so do not fall back to `pending`.
-      const dryRun = await api.deleteOriginals(ids, false);
-      setConfirmTyped("");
-      setCloudOk(false);
-      setDisk({ kind: "delete", dryRun });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function openOffload() {
-    const keepers = shots.filter((s) => s.verdict === "keep" && s.original_status === "present");
-    if (!keepers.length) {
-      setError("No keepers with originals still on disk.");
-      return;
-    }
-    setBusy("Dry-run offload…");
-    setError("");
-    try {
-      const ids = keepers.map((s) => s.id);
-      const dryRun = await api.offloadOriginals(ids, false);
-      setConfirmTyped("");
-      setCloudOk(false);
-      setDisk({ kind: "offload", dryRun });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function executeDisk() {
-    if (!disk?.dryRun) return;
-    const needed = disk.kind === "delete" ? "DELETE_ORIGINALS" : "OFFLOAD_ORIGINALS";
-    if (confirmTyped !== needed) return;
-    const ids = (disk.dryRun.files || []).map((f) => f.id);
-    const message = `Unlink ${ids.length} original file(s) (${fmtBytes(disk.dryRun.bytes)})? Previews stay. This cannot be undone from the catalog.`;
-    let ok = true;
-    try {
-      ok = isTauri()
-        ? await nativeConfirm(message, {
-            title: disk.kind === "delete" ? "Delete originals" : "Offload originals",
-            kind: "warning",
-          })
-        : window.confirm(message);
-    } catch {
-      ok = window.confirm(message);
-    }
-    if (!ok) return;
-    setBusy("Unlinking originals…");
-    try {
-      const result =
-        disk.kind === "delete"
-          ? await api.deleteOriginals(ids, true)
-          : await api.offloadOriginals(ids, true);
-      setDisk({ ...disk, dryRun: result });
-      await reload();
-      if (result.errors?.length) {
-        // Leave the dialog open so the per-file failures stay readable.
-        setBusy("");
-        return;
-      }
-      setDisk(null);
-      const n = result.count ?? ids.length;
-      // Not inside a finally -- that would clear this before it ever rendered.
-      setBusy(`Unlinked ${n} original${n === 1 ? "" : "s"} · previews kept`);
-      setTimeout(() => setBusy(""), 4000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setBusy("");
-    }
-  }
-
-
   async function loadAudit() {
     try {
       const res = await api.audit(200);
@@ -710,13 +526,11 @@ const verdicts = useMemo(() => {
         onJump={(idx) => nav.goTo(idx)}
         onView={(v) => void onView(v)}
         onImport={() => void onImport()}
-        onDelete={() => void openDelete()}
-        onOffload={() => void openOffload()}
-        onIdentifySeries={() => void runIdentifySeries()}
-        onCancelIdentify={() => {
-          cancelIdentify.current = true;
-        }}
-        identifyingSeries={identifyingSeries}
+        onDelete={() => void diskFlow.openDelete()}
+        onOffload={() => void diskFlow.openOffload()}
+        onIdentifySeries={() => void identify.runIdentifySeries(filtered, pickedIds)}
+        onCancelIdentify={identify.cancel}
+        identifyingSeries={identify.identifyingSeries}
         busy={busy}
         onBulkLocation={() => setShowBulkLocation(true)}
       />
@@ -829,38 +643,17 @@ const verdicts = useMemo(() => {
             onKeys={persistKeys}
             cli={paths.cli}
             library={paths.library}
-            hasXaiKey={hasXaiKey}
-            xaiKeyDraft={xaiKeyDraft}
-            onXaiKeyDraft={setXaiKeyDraft}
-            backend={identifyBackend}
-            ollamaModel={ollamaModel}
-            onBackend={setIdentifyBackend}
-            onOllamaModel={setOllamaModel}
-            onSaveIdentify={() => {
-              void (async () => {
-                try {
-                  const res = await api.setIdentify({
-                    backend: identifyBackend,
-                    model: ollamaModel,
-                  });
-                  if (res.backend === "xai" || res.backend === "ollama") setIdentifyBackend(res.backend);
-                  if (res.ollama_model) setOllamaModel(res.ollama_model);
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : String(e));
-                }
-              })();
-            }}
-            onSaveXaiKey={() => {
-              void (async () => {
-                try {
-                  const res = await api.setKey(xaiKeyDraft.trim());
-                  setHasXaiKey(!!res.has_xai_key);
-                  setXaiKeyDraft("");
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : String(e));
-                }
-              })();
-            }}
+            hasXaiKey={identify.hasXaiKey}
+            xaiKeyDraft={identify.xaiKeyDraft}
+            onXaiKeyDraft={identify.setXaiKeyDraft}
+            backend={identify.backend}
+            ollamaModel={identify.ollamaModel}
+            onBackend={identify.setBackend}
+            onOllamaModel={identify.setOllamaModel}
+            onSaveIdentify={() =>
+              void identify.saveBackend({ backend: identify.backend, model: identify.ollamaModel })
+            }
+            onSaveXaiKey={() => void identify.saveKey()}
             onViewAudit={loadAudit}
             onRefresh={() => {
               void (async () => {
@@ -895,7 +688,7 @@ const verdicts = useMemo(() => {
           <Detail
             shot={selected}
             loupe={loupe}
-            identifying={identifying}
+            identifying={identify.identifying}
             fieldMarkOptions={fieldMarkOptions}
             burstPos={
               burstReviewId && burstMembers.length
@@ -917,7 +710,7 @@ const verdicts = useMemo(() => {
             onAnimalType={(t) => void setAnimalType(selected.id, t)}
             onSaveIdentity={(c, s) => void saveIdentity(selected.id, c, s)}
             onSaveFieldMarks={(m) => void saveFieldMarks(selected.id, m)}
-            onRunIdentify={() => void runIdentify(selected.id)}
+            onRunIdentify={() => void identify.runIdentify(selected.id)}
           />
         ) : null}
       </main>
@@ -966,31 +759,19 @@ const verdicts = useMemo(() => {
         <DiskDialog
           kind={disk.kind}
           dryRun={disk.dryRun}
-          confirmTyped={confirmTyped}
-          cloudOk={cloudOk}
+          confirmTyped={diskFlow.confirmTyped}
+          cloudOk={diskFlow.cloudOk}
           busy={!!busy}
-          onTyped={setConfirmTyped}
-          onCloudOk={setCloudOk}
+          onTyped={diskFlow.setConfirmTyped}
+          onCloudOk={diskFlow.setCloudOk}
           onCancel={() => setDisk(null)}
-          onExecute={() => void executeDisk()}
+          onExecute={() => void diskFlow.executeDisk()}
         />
       ) : null}
     </div>
   );
 }
 
-function normalizeShot(s: Shot): Shot {
-  return {
-    ...s,
-    field_marks: Array.isArray(s.field_marks) ? s.field_marks : [],
-    similar_species: Array.isArray(s.similar_species) ? s.similar_species : [],
-    notes: s.notes || "",
-    confidence: s.confidence ?? null,
-    gps_from_file: !!s.gps_from_file,
-    preview_width: s.preview_width ?? null,
-    preview_height: s.preview_height ?? null,
-  };
-}
 
 function sortValue(s: Shot, key: SortKey): string | number {
   switch (key) {
