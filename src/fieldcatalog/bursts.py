@@ -29,7 +29,10 @@ def _meters(a: Shot, b: Shot) -> float:
 
 
 def assign_bursts(shots: list[Shot]) -> list[Shot]:
-    ordered = sorted(shots, key=lambda s: (_ts(s), s.id))
+    # fromisoformat is not free and the loop below compares every neighbour, so
+    # parse each shot's timestamp once rather than on every comparison.
+    ts = {s.id: _ts(s) for s in shots}
+    ordered = sorted(shots, key=lambda s: (ts[s.id], s.id))
     burst_of: dict[str, str] = {}
     cluster: list[Shot] = []
     burst_id = ""
@@ -44,7 +47,7 @@ def assign_bursts(shots: list[Shot]) -> list[Shot]:
             cluster = [s]
             continue
         prev = cluster[-1]
-        if abs(_ts(s) - _ts(prev)) <= MAX_GAP_S and _meters(prev, s) <= MAX_DIST_M:
+        if abs(ts[s.id] - ts[prev.id]) <= MAX_GAP_S and _meters(prev, s) <= MAX_DIST_M:
             cluster.append(s)
         else:
             flush()
@@ -59,11 +62,10 @@ def assign_bursts(shots: list[Shot]) -> list[Shot]:
 def burst_pick(members: list[Shot]) -> Shot | None:
     if len(members) < 2:
         return None
-    return sorted(
+    return max(
         members,
         key=lambda s: (s.sharpness or -1, s.quality or -1, s.stars, int(s.favorite)),
-        reverse=True,
-    )[0]
+    )
 
 
 def grouped(shots: list[Shot]) -> dict[str, list[Shot]]:

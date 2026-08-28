@@ -60,7 +60,6 @@ export default function App() {
   const [burstReviewId, setBurstReviewId] = useState<string | null>(null);
   const [identifying, setIdentifying] = useState(false);
   const [identifyingSeries, setIdentifyingSeries] = useState(false);
-  const [cheat, setCheat] = useState(false);
   const [pickedIds, setPickedIds] = useState<Set<string>>(() => new Set());
   const cancelIdentify = useRef(false);
   const [hasXaiKey, setHasXaiKey] = useState(false);
@@ -1020,7 +1019,6 @@ const verdicts = useMemo(() => {
       )}
       {showPalette && (
         <CommandPalette
-          view={view}
           history={history}
           historyIndex={historyIndex}
           onView={(v) => { onView(v); setShowPalette(false); }}

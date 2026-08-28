@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 export default function AuditLog(props: {
   entries: { ts: string; action: string; count: number; bytes: number }[];
   onClose: () => void;

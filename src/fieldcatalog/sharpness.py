@@ -15,13 +15,11 @@ def score_sharpness(path: Path, edge: int = 256) -> float:
         if scale < 1:
             img = img.resize((max(24, int(w * scale)), max(24, int(h * scale))), Image.Resampling.BILINEAR)
         g = np.asarray(img, dtype=np.float32)
-    k = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=np.float32)
-    padded = g
+    if min(g.shape) < 3:
+        return 0.0
+    # 4-neighbour Laplacian over the interior. Written out rather than convolved:
+    # the kernel is five non-zero cells and the borders are simply dropped.
     acc = (
-        k[1, 1] * padded[1:-1, 1:-1]
-        + k[1, 0] * padded[1:-1, :-2]
-        + k[1, 2] * padded[1:-1, 2:]
-        + k[0, 1] * padded[:-2, 1:-1]
-        + k[2, 1] * padded[2:, 1:-1]
+        g[1:-1, :-2] + g[1:-1, 2:] + g[:-2, 1:-1] + g[2:, 1:-1] - 4.0 * g[1:-1, 1:-1]
     )
     return float(acc.var())

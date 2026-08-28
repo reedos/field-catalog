@@ -60,7 +60,7 @@ def load_config(library: Path | None = None) -> dict:
             try:
                 saved = json.loads(p.read_text(encoding="utf-8"))
                 if isinstance(saved, dict):
-                    cfg.update({k: saved[k] for k in saved if k in cfg or k == "backend"})
+                    cfg.update({k: saved[k] for k in saved if k in cfg})
             except json.JSONDecodeError:
                 pass
     backend = str(cfg.get("backend") or "ollama").strip().lower()

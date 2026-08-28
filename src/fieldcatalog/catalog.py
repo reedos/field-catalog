@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -67,7 +68,6 @@ class Catalog:
         self.conn.commit()
 
     def _migrate(self) -> None:
-        self._ensure_migrations()
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(shots)")}
         added = False
         if "confidence" not in cols:
@@ -101,18 +101,12 @@ class Catalog:
             self.conn.commit()
 
 
-    def _ensure_migrations(self) -> None:
-        self.conn.execute("CREATE TABLE IF NOT EXISTS migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL)")
-        self.conn.commit()
-
-
     def distinct_field_marks(self, limit: int = 200) -> list[str]:
         marks = set()
         for row in self.conn.execute("SELECT field_marks FROM shots WHERE field_marks IS NOT NULL"):
             fm = row["field_marks"]
             if not fm:
                 continue
-            import json
             try:
                 arr = json.loads(fm)
                 if isinstance(arr, list):
@@ -139,17 +133,32 @@ class Catalog:
         ).fetchone()
         return Shot.from_row(row) if row else None
 
-    def list(self, **where: str) -> list[Shot]:
-        sql = "SELECT * FROM shots"
-        params: list[object] = []
-        clauses: list[str] = []
-        for k, v in where.items():
-            clauses.append(f"{k} = ?")
-            params.append(v)
-        if clauses:
-            sql += " WHERE " + " AND ".join(clauses)
-        sql += " ORDER BY captured_at DESC, id"
+    def _where(self, where: dict) -> tuple[str, list[object]]:
+        if not where:
+            return "", []
+        return " WHERE " + " AND ".join(f"{k} = ?" for k in where), list(where.values())
+
+    def list(self, limit: int | None = None, **where: str) -> list[Shot]:
+        clause, params = self._where(where)
+        sql = f"SELECT * FROM shots{clause} ORDER BY captured_at DESC, id"
+        if limit:
+            sql += " LIMIT ?"
+            params = [*params, limit]
         return [Shot.from_row(r) for r in self.conn.execute(sql, params)]
+
+    def counts(self, **where: str) -> tuple[int, dict[str, int], dict[str, int]]:
+        """Totals by verdict and original_status without building any Shot."""
+        clause, params = self._where(where)
+        verdicts: dict[str, int] = {}
+        statuses: dict[str, int] = {}
+        total = 0
+        for col, sink in (("verdict", verdicts), ("original_status", statuses)):
+            for row in self.conn.execute(
+                f"SELECT {col} AS k, COUNT(*) AS n FROM shots{clause} GROUP BY {col}", params
+            ):
+                sink[row["k"]] = row["n"]
+        total = sum(verdicts.values())
+        return total, verdicts, statuses
 
     def upsert(self, shot: Shot) -> None:
         cols = list(shot.to_row().keys())

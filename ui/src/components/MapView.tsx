@@ -18,16 +18,19 @@ export default function MapView(props: {
   );
 
   const clusters = useMemo(() => {
-    const map = new Map<string, {shots: any[]; lat: number; lon: number}>();
+    const map = new Map<string, {key: string; shots: Shot[]; lat: number; lon: number}>();
     for (const s of pins) {
       const lat = s.lat as number;
       const lon = s.lon as number;
       const key = `${Math.round(lat * 2) / 2}_${Math.round(lon * 2) / 2}`;
-      if (!map.has(key)) {
-        map.set(key, { shots: [s], lat, lon });
-      } else {
-        const c = map.get(key)!;
+      const c = map.get(key);
+      if (c) {
         c.shots.push(s);
+        // Centre on the cluster, not on whichever shot happened to arrive first.
+        c.lat += (lat - c.lat) / c.shots.length;
+        c.lon += (lon - c.lon) / c.shots.length;
+      } else {
+        map.set(key, { key, shots: [s], lat, lon });
       }
     }
     return Array.from(map.values());
@@ -46,25 +49,31 @@ export default function MapView(props: {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <Fit pins={pins} />
-        {clusters.map((c, i) => {
+        {clusters.map((c) => {
           const size = Math.min(14 + c.shots.length*0.8, 28);
           return (
             <CircleMarker
-              key={i}
+              key={c.key}
               center={[c.lat, c.lon]}
               radius={size}
               pathOptions={{ color: "#6a7a52", fillColor: "#c4a36a", fillOpacity: 0.9 }}
             >
               <Popup>
-                <div className="w-48">
-                  <div className="text-xs mb-2">{c.shots.length} shots in area</div>
-                  {c.shots.slice(0,6).map(s => (
-                    <div key={s.id} className="text-xs flex gap-2 items-center">
-                      <img src={previewUrl(s.preview_path)} className="w-8 h-8 object-cover" />
-                      <button className="underline" onClick={() => props.onOpen(s.id)}>{s.common_name || "Needs ID"}</button>
-                    </div>
-                  ))}
-                </div>
+                {c.shots.length === 1 ? (
+                  <PinCard shot={c.shots[0]} onOpen={props.onOpen} onLocation={props.onLocation} />
+                ) : (
+                  <div className="w-48">
+                    <div className="text-xs mb-2">{c.shots.length} shots in area</div>
+                    {c.shots.slice(0, 6).map((s) => (
+                      <div key={s.id} className="text-xs flex gap-2 items-center">
+                        <img src={previewUrl(s.preview_path)} alt="" className="w-8 h-8 object-cover" />
+                        <button className="underline" onClick={() => props.onOpen(s.id)}>
+                          {s.common_name || "Needs ID"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Popup>
             </CircleMarker>
           );
@@ -81,7 +90,6 @@ export default function MapView(props: {
 
 function Fit(props: { pins: Shot[] }) {
   const map = useMap();
-  const key = props.pins.map((p) => p.id).join(",");
   useEffect(() => {
     if (!props.pins.length) {
       map.setView([20, 0], 2);
@@ -89,7 +97,7 @@ function Fit(props: { pins: Shot[] }) {
     }
     const bounds = props.pins.map((p) => [p.lat as number, p.lon as number] as [number, number]);
     map.fitBounds(bounds, { padding: [48, 48], maxZoom: 12 });
-  }, [map, key, props.pins]);
+  }, [map, props.pins]);
   return null;
 }
 
@@ -103,7 +111,13 @@ function PinCard(props: {
   const src = previewUrl(props.shot.preview_path);
   return (
     <div className="w-48 font-sans text-ink">
-      {src ? <img src={src} alt="" className="w-full h-24 object-cover mb-2" /> : null}
+      {src ? (
+        <img
+          src={src}
+          alt={props.shot.common_name || "Shot preview"}
+          className="w-full h-24 object-cover mb-2"
+        />
+      ) : null}
       <input
         className="w-full border px-1 py-0.5 text-xs mb-1"
         value={label}
@@ -112,6 +126,7 @@ function PinCard(props: {
           if (label !== (props.shot.location || "")) props.onLocation(props.shot.id, label);
         }}
         placeholder="Place name"
+        aria-label="Place name"
       />
       <div className="text-[10px] text-neutral-600 mb-1">
         {(props.shot.lat as number).toFixed(5)}, {(props.shot.lon as number).toFixed(5)} file GPS

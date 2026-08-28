@@ -59,12 +59,16 @@ fn run_worker_sync(app: AppHandle, args: Vec<String>) -> Result<WorkerProc, Stri
         .stderr(Stdio::piped())
         .env("PYTHONUTF8", "1")
         .env("PYTHONIOENCODING", "utf-8");
-    let key_file = library.join("xai.key");
-    if key_file.is_file() {
-        if let Ok(key) = std::fs::read_to_string(&key_file) {
-            let key = key.trim();
-            if !key.is_empty() {
-                cmd.env("XAI_API_KEY", key);
+    // Only `identify` can use this. Reading it on every list and set-verdict
+    // put the secret in the environment of every child process for nothing.
+    if args.first().map(String::as_str) == Some("identify") {
+        let key_file = library.join("xai.key");
+        if key_file.is_file() {
+            if let Ok(key) = std::fs::read_to_string(&key_file) {
+                let key = key.trim();
+                if !key.is_empty() {
+                    cmd.env("XAI_API_KEY", key);
+                }
             }
         }
     }

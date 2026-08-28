@@ -576,3 +576,35 @@ def test_import_skips_exif_for_already_imported_files(tmp_path: Path, monkeypatc
     monkeypatch.setattr(importer, "parse_exif_many", lambda ps: asked.append(len(ps)) or real(ps))
     assert import_paths(cat, files)["skipped"] == 3
     assert asked == [0]
+
+
+def test_list_limit_reaches_sql_and_counts_are_aggregates(tmp_path: Path):
+    cat = Catalog(tmp_path / "library")
+    for i in range(7):
+        cat.upsert(
+            Shot(
+                id=f"n{i}",
+                original_path=f"{i}.jpg",
+                preview_path=f"{i}.jpg",
+                captured_at=f"2026-08-{10 + i:02d}T09:00:00",
+                verdict="keep" if i < 3 else "reject",
+            )
+        )
+    assert len(cat.list()) == 7
+    assert len(cat.list(limit=3)) == 3
+    assert len(cat.list(limit=3, verdict="keep")) == 3
+    assert len(cat.list(verdict="keep")) == 3
+
+    total, verdicts, statuses = cat.counts()
+    assert total == 7
+    assert verdicts == {"keep": 3, "reject": 4}
+    assert statuses == {"present": 7}
+
+    total, verdicts, _ = cat.counts(verdict="keep")
+    assert (total, verdicts) == (3, {"keep": 3})
+
+    # Newest first, and the limit takes the newest rather than an arbitrary slice.
+    assert [s.id for s in cat.list(limit=2)] == ["n6", "n5"]
+
+    empty = Catalog(tmp_path / "empty")
+    assert empty.counts() == (0, {}, {})

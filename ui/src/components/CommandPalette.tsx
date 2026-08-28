@@ -6,14 +6,12 @@ type PaletteItem =
   | { kind: "history"; label: string; state: ViewState; index: number };
 
 export default function CommandPalette({
-  view,
   history,
   historyIndex,
   onView,
   onJump,
   onClose,
 }: {
-  view: View;
   history: ViewState[];
   historyIndex: number;
   onView: (v: View) => void;

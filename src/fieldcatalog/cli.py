@@ -104,23 +104,19 @@ def cmd_list(ns: argparse.Namespace) -> int:
         where["verdict"] = ns.verdict
     if ns.status:
         where["original_status"] = ns.status
-    shots = cat.list(**where)
-    verdicts: dict[str, int] = {}
-    statuses: dict[str, int] = {}
-    for s in shots:
-        verdicts[s.verdict] = verdicts.get(s.verdict, 0) + 1
-        statuses[s.original_status] = statuses.get(s.original_status, 0) + 1
+    # Counts come from aggregates so --summary never hydrates a Shot, and the
+    # limit reaches SQL instead of slicing a fully built list.
+    total, verdicts, statuses = cat.counts(**where)
     payload = {
-        "count": len(shots),
+        "count": total,
         "verdicts": verdicts,
         "original_status": statuses,
         "previews": str(cat.previews),
     }
     if ns.summary:
         return _out(True, **payload)
-    shown = shots[: ns.limit] if ns.limit else shots
-    payload["shots"] = [shot_json(s) for s in shown]
-    if ns.limit and len(shots) > ns.limit:
+    payload["shots"] = [shot_json(s) for s in cat.list(limit=ns.limit or None, **where)]
+    if ns.limit and total > ns.limit:
         payload["truncated"] = True
     return _out(True, **payload)
 
@@ -153,7 +149,7 @@ def cmd_set(ns: argparse.Namespace) -> int:
     if ns.location is not None:
         fields["location"] = ns.location
     if ns.animal_type is not None:
-        fields["animal_type"] = ns.animal_type or None
+        fields["animal_type"] = ns.animal_type
     if ns.field_marks is not None:
         marks = [m.strip() for m in ns.field_marks.replace("\n", "|").split("|") if m.strip()]
         if "," in ns.field_marks and "|" not in ns.field_marks:
