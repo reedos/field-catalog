@@ -717,3 +717,57 @@ def test_serve_slow_lane_does_not_block_fast_commands(tmp_path: Path, monkeypatc
     assert all(r["ok"] for r in responses)
     assert responses[1]["shot"]["common_name"] == "House Sparrow"
     assert cat.get(sid).verdict == "keep"
+
+
+# --- burst ordering ----------------------------------------------------------
+
+
+def test_same_second_burst_orders_by_filename(tmp_path: Path):
+    """EXIF is whole seconds, so a 7fps burst shares timestamps; the filename
+    sequence is the real order. The old uuid tiebreak shuffled frames."""
+    shots = []
+    for i in (3, 1, 4, 2, 5):
+        shots.append(
+            Shot(
+                id=f"zz-{5 - i}",  # ids deliberately anti-ordered
+                original_path=f"DSC_{i:04d}.NEF",
+                preview_path=f"{i}.jpg",
+                display_name=f"DSC_{i:04d}",
+                captured_at="2026-08-23T09:00:01",  # all the same second
+            )
+        )
+    assign_bursts(shots)
+    assert len({s.burst_id for s in shots}) == 1
+    # The burst id anchors on the first frame by filename, not by uuid luck.
+    first = min(shots, key=lambda s: s.display_name)
+    assert all(s.burst_id == f"burst-{first.id}" for s in shots)
+
+
+def test_list_breaks_same_second_ties_by_name(tmp_path: Path):
+    cat = Catalog(tmp_path / "library")
+    for name, sid in (("DSC_0002", "b"), ("DSC_0010", "a"), ("DSC_0001", "c")):
+        cat.upsert(
+            Shot(
+                id=sid,
+                original_path=name,
+                preview_path=name,
+                display_name=name,
+                captured_at="2026-08-23T09:00:01",
+            )
+        )
+    # Descending overall, so within the tied second: newest filename first.
+    assert [s.display_name for s in cat.list()] == ["DSC_0010", "DSC_0002", "DSC_0001"]
+
+
+def test_subsecond_exif_appended():
+    from fieldcatalog.exif import _with_subsec
+
+    assert _with_subsec("2026-08-23T09:00:01", "25") == "2026-08-23T09:00:01.25"
+    assert _with_subsec("2026-08-23T09:00:01", None) == "2026-08-23T09:00:01"
+    assert _with_subsec("2026-08-23T09:00:01.25", "99") == "2026-08-23T09:00:01.25"
+    assert _with_subsec(None, "25") is None
+    # Subsecond stamps must still parse and cluster.
+    a = Shot(id="a", original_path="a", preview_path="a", captured_at="2026-08-23T09:00:01.25")
+    b = Shot(id="b", original_path="b", preview_path="b", captured_at="2026-08-23T09:00:01.50")
+    assign_bursts([a, b])
+    assert a.burst_id == b.burst_id

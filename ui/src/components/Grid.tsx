@@ -6,6 +6,10 @@ import { previewUrl } from "../lib/preview";
 
 const GAP = 8;
 const TARGET_H = 420;
+// A 2:3 portrait at the landscape target height gets ~280px of width -- half a
+// landscape neighbour's area. Rows that lean portrait pack to a taller target
+// so both orientations read at comparable size.
+const PORTRAIT_TARGET_H = 560;
 const CAPTION_H = 92;
 // 3:2 landscape -- the D850's native ratio, so the first paint is close for
 // most frames and rows barely move once real dimensions arrive.
@@ -22,6 +26,14 @@ type PackedRow = {
   height: number;
 };
 
+/** Target row height, blending taller as the row's mean aspect goes portrait. */
+function rowTarget(meanAr: number): number {
+  if (meanAr >= 1) return TARGET_H;
+  if (meanAr <= 0.7) return PORTRAIT_TARGET_H;
+  const t = (1 - meanAr) / 0.3;
+  return Math.round(TARGET_H + (PORTRAIT_TARGET_H - TARGET_H) * t);
+}
+
 function packRows(shots: Shot[], containerWidth: number, aspects: Map<string, number>): PackedRow[] {
   const inner = Math.max(240, containerWidth - 16);
   const rows: PackedRow[] = [];
@@ -29,7 +41,9 @@ function packRows(shots: Shot[], containerWidth: number, aspects: Map<string, nu
   let arSum = 0;
 
   function emit(items: { shot: Shot; ar: number }[], height: number) {
-    const h = Math.min(560, Math.max(200, height));
+    const mean = items.reduce((a, it) => a + it.ar, 0) / items.length;
+    const maxH = mean < 1 ? 760 : 560;
+    const h = Math.min(maxH, Math.max(200, height));
     rows.push({
       height: h,
       items: items.map((it) => ({ shot: it.shot, width: it.ar * h })),
@@ -39,7 +53,8 @@ function packRows(shots: Shot[], containerWidth: number, aspects: Map<string, nu
   for (const shot of shots) {
     const ar = aspects.get(shot.id) ?? DEFAULT_AR;
     const nextGaps = GAP * buf.length;
-    const widthIfAdded = (arSum + ar) * TARGET_H + nextGaps;
+    const meanIfAdded = (arSum + ar) / (buf.length + 1);
+    const widthIfAdded = (arSum + ar) * rowTarget(meanIfAdded) + nextGaps;
     if (buf.length && widthIfAdded > inner) {
       const gaps = GAP * (buf.length - 1);
       emit(buf, (inner - gaps) / arSum);
@@ -52,7 +67,8 @@ function packRows(shots: Shot[], containerWidth: number, aspects: Map<string, nu
   if (buf.length) {
     const gaps = GAP * (buf.length - 1);
     const filled = (inner - gaps) / arSum;
-    emit(buf, Math.min(TARGET_H, filled));
+    const mean = arSum / buf.length;
+    emit(buf, Math.min(rowTarget(mean), filled));
   }
   return rows;
 }

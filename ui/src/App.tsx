@@ -171,7 +171,15 @@ export default function App() {
     if (!burstReviewId) return [];
     return shots
       .filter((s) => s.burst_id === burstReviewId)
-      .sort((a, b) => (a.captured_at || "").localeCompare(b.captured_at || "") || a.id.localeCompare(b.id));
+      // EXIF timestamps are whole seconds, so a 7fps burst has many frames on
+      // the same instant. The filename sequence (DSC_####) is the real order;
+      // the old uuid tiebreak shuffled frames within each second.
+      .sort(
+        (a, b) =>
+          (a.captured_at || "").localeCompare(b.captured_at || "") ||
+          (a.display_name || "").localeCompare(b.display_name || "", undefined, { numeric: true }) ||
+          a.id.localeCompare(b.id),
+      );
   }, [shots, burstReviewId]);
   const navList = burstReviewId ? burstMembers : filtered;
   const selectedIndex = navList.findIndex((s) => s.id === selectedId);

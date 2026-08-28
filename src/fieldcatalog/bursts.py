@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections import defaultdict
 from datetime import datetime
 
@@ -15,6 +16,13 @@ def _ts(shot: Shot) -> float:
         return datetime.fromisoformat(shot.captured_at).timestamp()
     except ValueError:
         return 0.0
+
+
+def _seq(shot: Shot) -> tuple:
+    """Natural-order key for DSC_0009 vs DSC_0010 style names."""
+    name = shot.display_name or ""
+    parts = re.split(r"(\d+)", name)
+    return tuple(int(p) if p.isdigit() else p for p in parts)
 
 
 def _meters(a: Shot, b: Shot) -> float:
@@ -32,7 +40,8 @@ def assign_bursts(shots: list[Shot]) -> list[Shot]:
     # fromisoformat is not free and the loop below compares every neighbour, so
     # parse each shot's timestamp once rather than on every comparison.
     ts = {s.id: _ts(s) for s in shots}
-    ordered = sorted(shots, key=lambda s: (ts[s.id], s.id))
+    # Same-second frames (any burst) order by filename sequence, not by uuid.
+    ordered = sorted(shots, key=lambda s: (ts[s.id], _seq(s), s.id))
     burst_of: dict[str, str] = {}
     cluster: list[Shot] = []
     burst_id = ""

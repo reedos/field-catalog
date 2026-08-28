@@ -46,6 +46,14 @@ def _shutter(value: Any) -> str:
     return f"{seconds:g}"
 
 
+def _with_subsec(captured_at: str | None, subsec: Any) -> str | None:
+    """Append the EXIF subsecond field so same-second burst frames stay ordered."""
+    if not captured_at or "." in captured_at:
+        return captured_at
+    digits = "".join(c for c in str(subsec or "") if c.isdigit())
+    return f"{captured_at}.{digits}" if digits else captured_at
+
+
 def _empty() -> dict[str, Any]:
     return {
         "captured_at": None,
@@ -63,6 +71,7 @@ def _empty() -> dict[str, Any]:
 
 TAGS = (
     "-DateTimeOriginal",
+    "-SubSecTimeOriginal",
     "-CreateDate",
     "-GPSLatitude",
     "-GPSLongitude",
@@ -127,6 +136,7 @@ def _from_row(row: dict[str, Any]) -> dict[str, Any]:
                 break
             except ValueError:
                 out["captured_at"] = str(dt)
+        out["captured_at"] = _with_subsec(out["captured_at"], row.get("SubSecTimeOriginal"))
     lat, lon = row.get("GPSLatitude"), row.get("GPSLongitude")
     try:
         out["lat"] = float(lat) if lat is not None else None
@@ -192,6 +202,9 @@ def _pil(path: Path) -> dict[str, Any]:
                     out["captured_at"] = datetime.strptime(str(dt), "%Y:%m:%d %H:%M:%S").isoformat()
                 except ValueError:
                     pass
+            out["captured_at"] = _with_subsec(
+                out["captured_at"], named.get("SubsecTimeOriginal") or named.get("SubsecTime")
+            )
             try:
                 gps_ifd = exif.get_ifd(ExifTags.IFD.GPSInfo)  # type: ignore[attr-defined]
                 gps = {ExifTags.GPSTAGS.get(k, k): v for k, v in gps_ifd.items()}

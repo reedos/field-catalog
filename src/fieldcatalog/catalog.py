@@ -140,7 +140,8 @@ class Catalog:
 
     def list(self, limit: int | None = None, **where: str) -> list[Shot]:
         clause, params = self._where(where)
-        sql = f"SELECT * FROM shots{clause} ORDER BY captured_at DESC, id"
+        # display_name breaks same-second ties so bursts stay in shot order.
+        sql = f"SELECT * FROM shots{clause} ORDER BY captured_at DESC, display_name DESC, id"
         if limit:
             sql += " LIMIT ?"
             params = [*params, limit]
