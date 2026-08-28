@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
+import queue
 import sys
+import threading
 from pathlib import Path
 
 from .bursts import burst_pick, grouped
@@ -17,8 +20,16 @@ from .models import Shot
 _PRETTY = False
 
 
+_CAPTURE = threading.local()
+
+
 def _out(ok: bool, **payload) -> int:
-    print(json.dumps({"ok": ok, **payload}, indent=2 if _PRETTY else None, default=str))
+    text = json.dumps({"ok": ok, **payload}, indent=2 if _PRETTY else None, default=str)
+    buf = getattr(_CAPTURE, "buf", None)
+    if buf is not None:
+        buf.write(text)
+    else:
+        print(text)
     return 0 if ok else 1
 
 
@@ -50,8 +61,18 @@ def parse_field_marks(raw: str | None) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
+_CATALOGS = threading.local()
+
+
 def _catalog(ns: argparse.Namespace) -> Catalog:
-    return Catalog(Path(ns.library))
+    cache = getattr(_CATALOGS, "cache", None)
+    if cache is None:
+        cache = _CATALOGS.cache = {}
+    key = str(Path(ns.library).expanduser().resolve())
+    cat = cache.get(key)
+    if cat is None:
+        cat = cache[key] = Catalog(Path(ns.library))
+    return cat
 
 
 def shot_json(s: Shot) -> dict:
@@ -504,10 +525,92 @@ def build_parser() -> argparse.ArgumentParser:
     fm.add_argument("--limit", type=int, default=200)
     fm.set_defaults(func=cmd_field_marks)
 
+    sv = sub.add_parser("serve", help="persistent worker: JSON requests on stdin, responses on stdout")
+    sv.set_defaults(func=cmd_serve)
+
     au = sub.add_parser("audit", help="read audit log")
     au.add_argument("--limit", type=int, default=200)
     au.set_defaults(func=cmd_audit)
     return p
+
+
+# Commands that can run for minutes. They get their own lane so a verdict typed
+# mid-import answers immediately instead of queueing behind it.
+SLOW_COMMANDS = {"identify", "import", "refresh-previews"}
+
+
+def serve_loop(library: str, stdin, stdout) -> None:
+    """Persistent worker: one JSON request per stdin line, one response per line.
+
+    Request:  {"id": <int>, "args": [<subcommand argv, no --library>]}
+    Response: the same envelope the one-shot CLI prints, plus the request "id".
+    Progress still goes to stderr, exactly as in one-shot mode. EOF on stdin is
+    the shutdown signal -- the parent closing the pipe is how the app quits.
+    """
+    write_lock = threading.Lock()
+
+    def respond(obj: dict) -> None:
+        with write_lock:
+            stdout.write(json.dumps(obj, default=str) + "\n")
+            stdout.flush()
+
+    def run_one(req_id, argv: list[str]) -> None:
+        try:
+            ns = build_parser().parse_args(["--library", str(library), *argv])
+        except SystemExit:
+            respond({"id": req_id, "ok": False, "error": f"bad arguments: {argv}"})
+            return
+        buf = io.StringIO()
+        _CAPTURE.buf = buf
+        try:
+            ns.func(ns)
+        except Exception as e:
+            respond({"id": req_id, "ok": False, "error": str(e)})
+            return
+        finally:
+            _CAPTURE.buf = None
+        try:
+            payload = json.loads(buf.getvalue())
+        except (json.JSONDecodeError, ValueError):
+            payload = {"ok": False, "error": "worker produced no JSON"}
+        payload["id"] = req_id
+        respond(payload)
+
+    slow_q: queue.Queue = queue.Queue()
+
+    def slow_worker() -> None:
+        while True:
+            item = slow_q.get()
+            if item is None:
+                return
+            run_one(*item)
+
+    slow_thread = threading.Thread(target=slow_worker, daemon=True)
+    slow_thread.start()
+
+    for line in stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+            req_id = req["id"]
+            argv = [str(a) for a in req["args"]]
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            respond({"id": None, "ok": False, "error": f"bad request: {e}"})
+            continue
+        if argv and argv[0] in SLOW_COMMANDS:
+            slow_q.put((req_id, argv))
+        else:
+            run_one(req_id, argv)
+
+    slow_q.put(None)
+    slow_thread.join(timeout=5)
+
+
+def cmd_serve(ns: argparse.Namespace) -> int:
+    serve_loop(ns.library, sys.stdin, sys.stdout)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> None:

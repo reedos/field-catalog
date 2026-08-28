@@ -622,3 +622,98 @@ def test_field_marks_split_the_same_way_everywhere():
     assert parse_field_marks("") == []
     assert parse_field_marks(None) == []
     assert parse_field_marks("  ,, ") == []
+
+
+# --- serve mode --------------------------------------------------------------
+
+
+def _serve(lib, requests):
+    from io import StringIO
+
+    from fieldcatalog.cli import serve_loop
+
+    stdin = StringIO("".join(json.dumps(r) + "\n" for r in requests))
+    stdout = StringIO()
+    serve_loop(str(lib), stdin, stdout)
+    return [json.loads(line) for line in stdout.getvalue().splitlines()]
+
+
+def test_serve_round_trip(tmp_path: Path):
+    src = tmp_path / "card"
+    src.mkdir()
+    Image.new("RGB", (60, 40), (40, 80, 40)).save(src / "a.jpg", "JPEG")
+    lib = tmp_path / "library"
+
+    # import rides the slow lane, so a list sent in the same batch would race
+    # it by design. Import first, then query in a second serve session.
+    first = _serve(lib, [{"id": 1, "args": ["init"]}, {"id": 2, "args": ["import", "--source", str(src)]}])
+    by_id = {r["id"]: r for r in first}
+    assert by_id[1]["ok"] is True
+    assert by_id[2]["ok"] is True and by_id[2]["imported"] == 1
+
+    responses = _serve(
+        lib,
+        [
+            {"id": 3, "args": ["list", "--summary"]},
+            {"id": 4, "args": ["no-such-command"]},
+            {"id": 5, "args": ["set-verdict", "--id", "nope", "--verdict", "keep"]},
+        ],
+    )
+    by_id = {r["id"]: r for r in responses}
+    assert by_id[3]["ok"] is True and by_id[3]["count"] == 1
+    assert by_id[4]["ok"] is False and "bad arguments" in by_id[4]["error"]
+    assert by_id[5]["ok"] is False and by_id[5]["error"] == "unknown id"
+
+
+def test_serve_malformed_request_does_not_kill_the_loop(tmp_path: Path):
+    from io import StringIO
+
+    from fieldcatalog.cli import serve_loop
+
+    stdin = StringIO('this is not json\n{"id": 9, "args": ["init"]}\n')
+    stdout = StringIO()
+    serve_loop(str(tmp_path / "library"), stdin, stdout)
+    responses = [json.loads(line) for line in stdout.getvalue().splitlines()]
+    assert responses[0]["ok"] is False and responses[0]["id"] is None
+    assert responses[1] == {**responses[1], "id": 9, "ok": True}
+
+
+def test_serve_slow_lane_does_not_block_fast_commands(tmp_path: Path, monkeypatch):
+    """A verdict typed while identify is running must answer immediately."""
+    import time
+
+    import fieldcatalog.vision as vision
+
+    src = tmp_path / "card"
+    src.mkdir()
+    Image.new("RGB", (60, 40), (40, 80, 40)).save(src / "a.jpg", "JPEG")
+    lib = tmp_path / "library"
+    cat = Catalog(lib)
+    sid = import_paths(cat, [src / "a.jpg"])["ids"][0]
+
+    def slow_identify(_preview, **_kw):
+        time.sleep(0.3)
+        return {
+            "common_name": "House Sparrow",
+            "scientific_name": "Passer domesticus",
+            "animal_type": "bird",
+            "confidence": 0.9,
+            "field_marks": [],
+            "similar_species": [],
+            "notes": "",
+        }
+
+    monkeypatch.setattr(vision, "identify_preview", slow_identify)
+
+    responses = _serve(
+        lib,
+        [
+            {"id": 1, "args": ["identify", "--id", sid]},
+            {"id": 2, "args": ["set-verdict", "--id", sid, "--verdict", "keep"]},
+        ],
+    )
+    # The verdict must come back before the identify that was sent first.
+    assert [r["id"] for r in responses] == [2, 1]
+    assert all(r["ok"] for r in responses)
+    assert responses[1]["shot"]["common_name"] == "House Sparrow"
+    assert cat.get(sid).verdict == "keep"
