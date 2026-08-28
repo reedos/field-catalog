@@ -49,6 +49,7 @@ export default function ShortcutsOverlay({ keys, view, onClose }: { keys: Keymap
             ["Loupe", keys.loupe],
             ["Search", keys.search],
             ["Close", keys.close],
+            ["Undo verdict", "Ctrl+Z"],
           ].map(([a, k]) => (
             <Fragment key={String(a)}>
               <div className="text-bark/80">{a}</div>

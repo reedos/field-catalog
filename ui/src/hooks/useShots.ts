@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { Shot } from "../types";
+import type { Shot, Verdict } from "../types";
 import { api } from "../lib/worker";
 
 /** Fill in the fields the worker may omit so the UI never branches on undefined. */
@@ -65,5 +65,44 @@ export function useShots(onError: (e: unknown) => void) {
     });
   }
 
-  return { shots, setShots, shotsById, catalogFieldMarks, reload, patchShot, patchShots, optimistic };
+  // Verdict undo: each entry is one user gesture -- a single cull keystroke,
+  // or a whole keep-this/keep-pick group -- restored together by Ctrl+Z.
+  const undoStack = useRef<Array<Array<{ id: string; verdict: Verdict }>>>([]);
+
+  function recordVerdictUndo(changes: Array<{ id: string; next: Verdict }>) {
+    const entry = changes
+      .map(({ id, next }) => {
+        const cur = shotsByIdRef.current.get(id);
+        return cur && cur.verdict !== next ? { id, verdict: cur.verdict } : null;
+      })
+      .filter((e): e is { id: string; verdict: Verdict } => e !== null);
+    if (!entry.length) return;
+    undoStack.current.push(entry);
+    if (undoStack.current.length > 50) undoStack.current.shift();
+  }
+
+  /** Restore the most recent verdict gesture. Returns how many shots reverted. */
+  function undoVerdicts(): number {
+    const entry = undoStack.current.pop();
+    if (!entry) return 0;
+    const patches = new Map(entry.map((e) => [e.id, { verdict: e.verdict }]));
+    patchShots(patches);
+    for (const e of entry) {
+      api.setVerdict(e.id, e.verdict).catch(onError);
+    }
+    return entry.length;
+  }
+
+  return {
+    shots,
+    setShots,
+    shotsById,
+    catalogFieldMarks,
+    reload,
+    patchShot,
+    patchShots,
+    optimistic,
+    recordVerdictUndo,
+    undoVerdicts,
+  };
 }

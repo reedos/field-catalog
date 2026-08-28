@@ -55,7 +55,8 @@ export default function App() {
     setError(e instanceof Error ? e.message : String(e));
   }
 
-  const { shots, shotsById, catalogFieldMarks, reload, patchShot, optimistic } = useShots(fail);
+  const { shots, shotsById, catalogFieldMarks, reload, patchShot, optimistic, recordVerdictUndo, undoVerdicts } =
+    useShots(fail);
 
   const diskFlow = useDiskFlow({
     shots,
@@ -222,10 +223,12 @@ export default function App() {
   }, [shots]);
 
   async function setVerdictOnly(id: string, v: Verdict) {
+    recordVerdictUndo([{ id, next: v }]);
     await optimistic(new Map([[id, { verdict: v }]]), () => api.setVerdict(id, v));
   }
 
   async function applyVerdict(id: string, v: Verdict) {
+    recordVerdictUndo([{ id, next: v }]);
     void optimistic(new Map([[id, { verdict: v }]]), () => api.setVerdict(id, v));
     if (!burstReviewId) return;
     const idx = burstMembers.findIndex((s) => s.id === id);
@@ -345,6 +348,9 @@ export default function App() {
 
   /** Keep one frame of a burst and reject the rest, in a single optimistic write. */
   async function keepOneOfBurst(keepId: string, memberIds: string[]) {
+    recordVerdictUndo(
+      memberIds.map((id) => ({ id, next: (id === keepId ? "keep" : "reject") as Verdict })),
+    );
     const patches = new Map<string, Partial<Shot>>();
     for (const id of memberIds) {
       patches.set(id, { verdict: id === keepId ? "keep" : "reject" });
@@ -410,6 +416,15 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setShowPalette((v) => !v);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        const restored = undoVerdicts();
+        if (restored) {
+          setBusy(`Restored ${restored} verdict${restored === 1 ? "" : "s"}`);
+          setTimeout(() => setBusy(""), 2000);
+        }
         return;
       }
       if (e.altKey && e.key === "ArrowLeft") {
