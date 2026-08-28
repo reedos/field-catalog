@@ -61,41 +61,63 @@ def _empty() -> dict[str, Any]:
     }
 
 
-def _exiftool(path: Path) -> dict[str, Any] | None:
+TAGS = (
+    "-DateTimeOriginal",
+    "-CreateDate",
+    "-GPSLatitude",
+    "-GPSLongitude",
+    "-Make",
+    "-Model",
+    "-LensModel",
+    "-ISO",
+    "-ShutterSpeed",
+    "-FNumber",
+    "-FocalLength",
+    "-City",
+    "-Location",
+    "-Country",
+)
+
+# exiftool is a large Perl program; starting it costs far more than reading any
+# one file. Ask it about a whole batch per spawn.
+EXIFTOOL_BATCH = 200
+
+
+def _exiftool_rows(paths: list[Path]) -> dict[str, dict[str, Any]] | None:
+    """Run exiftool once over many files. None means exiftool is unavailable."""
     bin_path = shutil.which("exiftool")
     if not bin_path:
         return None
-    proc = subprocess.run(
-        [
-            bin_path,
-            "-json",
-            "-n",
-            "-DateTimeOriginal",
-            "-CreateDate",
-            "-GPSLatitude",
-            "-GPSLongitude",
-            "-Make",
-            "-Model",
-            "-LensModel",
-            "-ISO",
-            "-ShutterSpeed",
-            "-FNumber",
-            "-FocalLength",
-            "-City",
-            "-Location",
-            "-Country",
-            str(path),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if proc.returncode != 0 or not proc.stdout.strip():
+    rows: dict[str, dict[str, Any]] = {}
+    for i in range(0, len(paths), EXIFTOOL_BATCH):
+        chunk = paths[i : i + EXIFTOOL_BATCH]
+        proc = subprocess.run(
+            [bin_path, "-json", "-n", *TAGS, *[str(p) for p in chunk]],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if not proc.stdout.strip():
+            continue
+        try:
+            parsed = json.loads(proc.stdout)
+        except Exception:
+            continue
+        for row in parsed:
+            source = row.get("SourceFile")
+            if source:
+                rows[str(Path(source).resolve())] = _from_row(row)
+    return rows
+
+
+def _exiftool(path: Path) -> dict[str, Any] | None:
+    rows = _exiftool_rows([path])
+    if rows is None:
         return None
-    try:
-        row = json.loads(proc.stdout)[0]
-    except Exception:
-        return None
+    return rows.get(str(path.resolve()))
+
+
+def _from_row(row: dict[str, Any]) -> dict[str, Any]:
     out = _empty()
     dt = row.get("DateTimeOriginal") or row.get("CreateDate")
     if dt:
@@ -184,21 +206,7 @@ def _pil(path: Path) -> dict[str, Any]:
 
 def parse_exif(path: Path) -> dict[str, Any]:
     """Read GPS/time/camera from the file. Never invents coordinates or a place name."""
-    out = _exiftool(path)
-    if out is None:
-        out = _pil(path)
-    elif not _complete(out):
-        # exiftool returning a dict does not mean it filled it in. Merge PIL in
-        # field by field rather than letting a sparse exiftool result win.
-        for key, value in _pil(path).items():
-            if out.get(key) in (None, "") and value not in (None, ""):
-                out[key] = value
-    if not out.get("captured_at"):
-        # EXIF timestamps are naive local time, so the mtime fallback has to be
-        # local too -- a UTC value here would shift the shot into another day
-        # and out of its burst.
-        out["captured_at"] = datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds")
-    return out
+    return parse_exif_many([path])[path]
 
 
 def _complete(meta: dict[str, Any]) -> bool:
@@ -206,3 +214,27 @@ def _complete(meta: dict[str, Any]) -> bool:
     most frames, so it is not part of the test -- requiring it would run PIL a
     second time over the whole library for nothing."""
     return all(meta.get(k) not in (None, "") for k in ("captured_at", "camera"))
+
+
+def parse_exif_many(paths: list[Path]) -> dict[Path, dict[str, Any]]:
+    """parse_exif over a list, with one exiftool spawn per batch instead of per file.
+
+    Starting exiftool costs far more than reading a single file, so importing a
+    card used to spend most of its time in process startup.
+    """
+    if not paths:
+        return {}
+    rows = _exiftool_rows(paths)
+    out: dict[Path, dict[str, Any]] = {}
+    for path in paths:
+        meta = None if rows is None else rows.get(str(path.resolve()))
+        if meta is None:
+            meta = _pil(path)
+        elif not _complete(meta):
+            for key, value in _pil(path).items():
+                if meta.get(key) in (None, "") and value not in (None, ""):
+                    meta[key] = value
+        if not meta.get("captured_at"):
+            meta["captured_at"] = datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds")
+        out[path] = meta
+    return out

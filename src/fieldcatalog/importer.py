@@ -7,7 +7,7 @@ from pathlib import Path
 from .animal import infer_animal_type
 from .bursts import assign_bursts
 from .catalog import Catalog
-from .exif import parse_exif
+from .exif import parse_exif_many
 from .models import Shot
 from .preview import is_photo, write_preview
 from .sharpness import score_sharpness
@@ -26,6 +26,12 @@ def import_paths(catalog: Catalog, paths: list[Path], *, progress=None) -> dict:
     skipped = 0
     errors: list[dict] = []
     total = len(paths)
+
+    # One exiftool spawn per batch rather than one per photo. Only the files we
+    # will actually import are read, so a re-import of a known card costs nothing.
+    fresh = [p for p in paths if not catalog.by_original(str(p.resolve()))]
+    meta_by_path = parse_exif_many(fresh)
+
     for i, path in enumerate(paths, start=1):
         if progress:
             progress(i, total)
@@ -37,7 +43,7 @@ def import_paths(catalog: Catalog, paths: list[Path], *, progress=None) -> dict:
         preview = catalog.preview_file(shot_id)
         try:
             preview_w, preview_h = write_preview(path, preview)
-            meta = parse_exif(path)
+            meta = meta_by_path.get(path) or {}
             sharpness = score_sharpness(preview)
         except Exception as e:
             if preview.exists():

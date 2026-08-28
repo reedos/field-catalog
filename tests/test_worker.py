@@ -484,3 +484,95 @@ def test_refresh_previews_backfills_dimensions(tmp_path: Path):
 
     assert refresh_previews(cat)["refreshed"] == 1
     assert (cat.get(sid).preview_width, cat.get(sid).preview_height) == (1600, 1066)
+
+
+def test_exiftool_runs_once_per_batch_not_once_per_file(tmp_path: Path, monkeypatch):
+    """Starting exiftool costs far more than reading a file; import must batch."""
+    import subprocess as sp
+
+    import fieldcatalog.exif as exif
+
+    src = tmp_path / "card"
+    src.mkdir()
+    paths = []
+    for i in range(25):
+        p = src / f"DSC_{i:03d}.jpg"
+        Image.new("RGB", (60, 40), (i * 5, 80, 40)).save(p, "JPEG")
+        paths.append(p)
+
+    spawns = []
+
+    class FakeProc:
+        returncode = 0
+
+        def __init__(self, files):
+            self.stdout = json.dumps(
+                [
+                    {
+                        "SourceFile": f,
+                        "DateTimeOriginal": "2026:08:23 09:00:00",
+                        "Make": "NIKON",
+                        "Model": "D850",
+                        "ShutterSpeed": 0.008,
+                    }
+                    for f in files
+                ]
+            )
+
+    def fake_run(argv, **kw):
+        files = [a for a in argv[1:] if not a.startswith("-")]
+        spawns.append(len(files))
+        return FakeProc(files)
+
+    monkeypatch.setattr(exif.shutil, "which", lambda _n: "exiftool")
+    monkeypatch.setattr(sp, "run", fake_run)
+
+    metas = exif.parse_exif_many(paths)
+    assert len(spawns) == 1, f"expected one spawn, got {len(spawns)}"
+    assert spawns[0] == 25
+    assert all(m["camera"] == "NIKON D850" for m in metas.values())
+    assert all(m["shutter"] == "1/125" for m in metas.values())
+
+
+def test_exiftool_batches_are_chunked(tmp_path: Path, monkeypatch):
+    """A very large card must not blow the command-line length limit."""
+    import subprocess as sp
+
+    import fieldcatalog.exif as exif
+
+    spawns = []
+
+    class FakeProc:
+        returncode = 0
+        stdout = "[]"
+
+    def fake_run(argv, **kw):
+        spawns.append(len([a for a in argv[1:] if not a.startswith("-")]))
+        return FakeProc()
+
+    monkeypatch.setattr(exif.shutil, "which", lambda _n: "exiftool")
+    monkeypatch.setattr(sp, "run", fake_run)
+
+    fake_paths = [tmp_path / f"{i}.jpg" for i in range(exif.EXIFTOOL_BATCH * 2 + 5)]
+    exif._exiftool_rows(fake_paths)
+    assert len(spawns) == 3
+    assert spawns == [exif.EXIFTOOL_BATCH, exif.EXIFTOOL_BATCH, 5]
+
+
+def test_import_skips_exif_for_already_imported_files(tmp_path: Path, monkeypatch):
+    """Re-importing a known card should not re-read any EXIF."""
+    import fieldcatalog.importer as importer
+
+    src = tmp_path / "card"
+    src.mkdir()
+    for i in range(3):
+        Image.new("RGB", (60, 40), (i * 5, 80, 40)).save(src / f"DSC_{i}.jpg", "JPEG")
+    files = sorted(src.glob("*.jpg"))
+    cat = Catalog(tmp_path / "library")
+    assert import_paths(cat, files)["imported"] == 3
+
+    asked = []
+    real = importer.parse_exif_many
+    monkeypatch.setattr(importer, "parse_exif_many", lambda ps: asked.append(len(ps)) or real(ps))
+    assert import_paths(cat, files)["skipped"] == 3
+    assert asked == [0]
