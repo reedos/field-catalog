@@ -4,7 +4,6 @@ import type { DiskResult } from "../types";
 export default function DiskDialog(props: {
   kind: "delete" | "offload";
   dryRun: DiskResult | null;
-  pending: DiskResult | null;
   confirmTyped: string;
   cloudOk: boolean;
   busy: boolean;
@@ -14,9 +13,11 @@ export default function DiskDialog(props: {
   onExecute: () => void;
 }) {
   const needed = props.kind === "delete" ? "DELETE_ORIGINALS" : "OFFLOAD_ORIGINALS";
-  const files = props.dryRun?.files || props.pending?.files || [];
-  const count = props.dryRun?.count ?? props.pending?.count ?? files.length;
-  const bytes = props.dryRun?.bytes ?? props.pending?.bytes ?? 0;
+  // Everything shown here comes from the dry run, never from `pending` -- the
+  // list the user reads has to be the list that gets executed.
+  const files = props.dryRun?.files || [];
+  const count = props.dryRun?.count ?? 0;
+  const bytes = props.dryRun?.bytes ?? 0;
   const errors = props.dryRun?.errors || [];
   const ready =
     !props.busy &&

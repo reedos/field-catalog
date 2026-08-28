@@ -52,7 +52,7 @@ export default function App() {
   const [keys, setKeys] = useState<Keymap>(loadKeys);
   const [bursts, setBursts] = useState<BurstPick[]>([]);
   const [paths, setPaths] = useState({ cli: "", library: "" });
-  const [disk, setDisk] = useState<null | { kind: "delete" | "offload"; pending: DiskResult | null; dryRun: DiskResult | null }>(null);
+  const [disk, setDisk] = useState<null | { kind: "delete" | "offload"; dryRun: DiskResult | null }>(null);
   const [audit, setAudit] = useState<{ts:string;action:string;count:number;bytes:number}[]>([]);
   const [auditOpen, setAuditOpen] = useState(false);
   const [confirmTyped, setConfirmTyped] = useState("");
@@ -610,15 +610,12 @@ export default function App() {
         return;
       }
       const ids = pending.files.map((f) => f.id).filter(Boolean);
-      let dryRun: DiskResult = pending;
-      try {
-        dryRun = await api.deleteOriginals(ids, false);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      }
+      // The dry run is the list the user confirms and the list we execute. If it
+      // fails there is nothing safe to show, so do not fall back to `pending`.
+      const dryRun = await api.deleteOriginals(ids, false);
       setConfirmTyped("");
       setCloudOk(false);
-      setDisk({ kind: "delete", pending, dryRun });
+      setDisk({ kind: "delete", dryRun });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -639,11 +636,7 @@ export default function App() {
       const dryRun = await api.offloadOriginals(ids, false);
       setConfirmTyped("");
       setCloudOk(false);
-      setDisk({
-        kind: "offload",
-        pending: { ok: true, count: dryRun.count, bytes: dryRun.bytes, files: dryRun.files },
-        dryRun,
-      });
+      setDisk({ kind: "offload", dryRun });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -677,14 +670,18 @@ export default function App() {
           : await api.offloadOriginals(ids, true);
       setDisk({ ...disk, dryRun: result });
       await reload();
-      if (!result.errors?.length) {
-        setDisk(null);
-        setBusy(`Unlinked ${result.count ?? ids.length} original${(result.count ?? ids.length) === 1 ? "" : "s"} · previews kept`);
-        setTimeout(() => setBusy(""), 4000);
+      if (result.errors?.length) {
+        // Leave the dialog open so the per-file failures stay readable.
+        setBusy("");
+        return;
       }
+      setDisk(null);
+      const n = result.count ?? ids.length;
+      // Not inside a finally -- that would clear this before it ever rendered.
+      setBusy(`Unlinked ${n} original${n === 1 ? "" : "s"} · previews kept`);
+      setTimeout(() => setBusy(""), 4000);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
       setBusy("");
     }
   }
@@ -1063,7 +1060,6 @@ const verdicts = useMemo(() => {
         <DiskDialog
           kind={disk.kind}
           dryRun={disk.dryRun}
-          pending={disk.pending}
           confirmTyped={confirmTyped}
           cloudOk={cloudOk}
           busy={!!busy}
