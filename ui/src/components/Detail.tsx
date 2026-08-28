@@ -205,18 +205,25 @@ export default function Detail(props: {
               Unrated
             </button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" role="group" aria-label="Star rating">
             {([1, 2, 3, 4, 5] as const).map((n) => (
               <button
                 type="button"
                 key={n}
                 onClick={() => props.onStars(n)}
+                aria-label={`${n} star${n === 1 ? "" : "s"}`}
+                aria-pressed={shot.stars >= n}
                 className={`text-sm ${shot.stars >= n ? "text-ochre" : "text-paper-dim"}`}
               >
                 ★
               </button>
             ))}
-            <button type="button" onClick={props.onFavorite} className="ml-2 text-xs border border-bark px-2 py-0.5">
+            <button
+              type="button"
+              onClick={props.onFavorite}
+              aria-pressed={!!shot.favorite}
+              className="ml-2 text-xs border border-bark px-2 py-0.5"
+            >
               {shot.favorite ? "Unfav" : "Fav"}
             </button>
             <button type="button" onClick={props.onColor} className="text-xs border border-bark px-2 py-0.5">

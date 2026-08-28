@@ -1,3 +1,4 @@
+import { useModalDialog } from "../hooks/useModalDialog";
 import { fmtBytes, fileName } from "../lib/format";
 import type { DiskResult } from "../types";
 
@@ -12,6 +13,7 @@ export default function DiskDialog(props: {
   onCancel: () => void;
   onExecute: () => void;
 }) {
+  const { dialogProps } = useModalDialog({ labelledBy: "disk-title" });
   const needed = props.kind === "delete" ? "DELETE_ORIGINALS" : "OFFLOAD_ORIGINALS";
   // Everything shown here comes from the dry run, never from `pending` -- the
   // list the user reads has to be the list that gets executed.
@@ -31,9 +33,9 @@ export default function DiskDialog(props: {
 
   return (
     <div className="fixed inset-0 z-[80] bg-ink/80 flex items-center justify-center p-6">
-      <div className="fc-card w-full max-w-3xl max-h-[90vh] flex flex-col font-serif">
+      <div {...dialogProps} className="fc-card w-full max-w-3xl max-h-[90vh] flex flex-col font-serif">
         <div className="px-5 py-3 border-b border-paper-dim">
-          <h2 className="text-xl">
+          <h2 id="disk-title" className="text-xl">
             {props.kind === "delete" ? "Unlink rejected originals" : "Offload keeper originals"}
           </h2>
           <p className="text-sm text-bark mt-1">

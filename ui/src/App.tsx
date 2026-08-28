@@ -523,6 +523,11 @@ export default function App() {
       if (!selectedId && navList[0]) setSelectedId(navList[0].id);
       const id = selectedId || navList[0]?.id;
       if (!id) return;
+      if (e.key === "Enter" && !detail) {
+        e.preventDefault();
+        setDetail(true);
+        return;
+      }
       const bare = !e.ctrlKey && !e.metaKey && !e.altKey;
       if (matches(e, keys.next) || (bare && (e.key === "ArrowRight" || e.key === "ArrowDown"))) {
         e.preventDefault();
@@ -850,6 +855,7 @@ const verdicts = useMemo(() => {
       )}
 
       <footer className="flex items-center gap-4 border-t border-bark bg-charcoal/60 px-4 py-1.5 text-xs text-paper-dim">
+        <span className="sr-only" role="status" aria-live="polite">{busy}</span>
         <span>
           <span className="text-paper">{filtered.length}</span> shown · {shots.length} in library
         </span>

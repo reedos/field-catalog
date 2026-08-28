@@ -245,7 +245,7 @@ export default function Grid(props: {
   }
 
   return (
-    <div ref={parentRef} className="fc-scroll h-full">
+    <div ref={parentRef} className="fc-scroll h-full" role="listbox" aria-label="Photo library">
       <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((vRow) => {
           const row = rows[vRow.index];
@@ -343,8 +343,19 @@ function Cell(props: {
     >
       <button
         type="button"
+        role="option"
+        aria-selected={props.selected}
+        aria-label={`${shot.common_name || shot.display_name || "Unidentified"}${
+          shot.verdict !== "unrated" ? `, ${shot.verdict}` : ""
+        }`}
         onClick={props.onSelect}
         onDoubleClick={props.onOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            props.onOpen();
+          }
+        }}
         className="relative w-full shrink-0 overflow-hidden bg-charcoal"
         style={{ height: props.imgHeight }}
       >

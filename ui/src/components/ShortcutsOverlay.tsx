@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import { useModalDialog } from "../hooks/useModalDialog";
 import type { Keymap, View } from "../types";
 
 const VIEW_HINTS: Record<View, { action: string; hint: string }[]> = {
@@ -28,11 +29,12 @@ const VIEW_HINTS: Record<View, { action: string; hint: string }[]> = {
 };
 
 export default function ShortcutsOverlay({ keys, view, onClose }: { keys: Keymap; view: View; onClose: () => void }) {
+  const { dialogProps } = useModalDialog({ labelledBy: "shortcuts-title" });
   return (
     <div className="fixed inset-0 z-50 bg-ink/90 flex items-center justify-center p-8" onClick={onClose}>
-      <div className="fc-card w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
+      <div {...dialogProps} className="fc-card w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-serif">Keyboard shortcuts</h3>
+          <h3 id="shortcuts-title" className="text-lg font-serif">Keyboard shortcuts</h3>
           <span className="text-xs text-bark">Press ? to toggle • Esc to close</span>
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm">
@@ -49,6 +51,7 @@ export default function ShortcutsOverlay({ keys, view, onClose }: { keys: Keymap
             ["Loupe", keys.loupe],
             ["Search", keys.search],
             ["Close", keys.close],
+            ["Open detail", "Enter"],
             ["Undo verdict", "Ctrl+Z"],
           ].map(([a, k]) => (
             <Fragment key={String(a)}>

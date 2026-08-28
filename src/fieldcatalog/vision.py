@@ -149,6 +149,11 @@ def load_api_key(library: Path | None = None) -> str:
 def save_api_key(library: Path, key: str) -> None:
     p = key_path(library)
     p.write_text((key or "").strip(), encoding="utf-8")
+    # Best effort: meaningful on POSIX, a no-op on Windows where ACLs govern.
+    try:
+        p.chmod(0o600)
+    except OSError:
+        pass
 
 
 def config_path(library: Path) -> Path:

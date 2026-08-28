@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useModalDialog } from "../hooks/useModalDialog";
 import type { Shot } from "../types";
 import { api } from "../lib/worker";
 
@@ -67,8 +68,8 @@ export default function BulkLocationModal({ open, shots, onClose, onApplied }: P
 
   return (
     <div className="fixed inset-0 z-50 bg-ink/80 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="w-full max-w-md bg-paper text-ink rounded shadow-xl p-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-serif mb-2">Mass set location by date</h3>
+      <Panel>
+        <h3 id="bulk-title" className="text-lg font-serif mb-2">Mass set location by date</h3>
         <p className="text-xs text-bark mb-4">
           Sets the place-name label for every photo captured that calendar day. File GPS is not moved. One geocode if needed.
         </p>
@@ -111,7 +112,17 @@ export default function BulkLocationModal({ open, shots, onClose, onApplied }: P
             {busy ? "Applying…" : `Apply to ${count} shots`}
           </button>
         </div>
-      </div>
+      </Panel>
+    </div>
+  );
+}
+
+/** The dialog panel. Separate so its focus-trap hooks only run while open. */
+function Panel({ children }: { children: ReactNode }) {
+  const { dialogProps } = useModalDialog({ labelledBy: "bulk-title" });
+  return (
+    <div {...dialogProps} className="fc-card w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
+      {children}
     </div>
   );
 }

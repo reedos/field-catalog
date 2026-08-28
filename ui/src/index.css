@@ -64,6 +64,19 @@ body {
     @apply border-moss/70 text-paper;
   }
 
+  /* Announced to assistive tech, invisible on screen. */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
   /* Keyboard hint chip, dark chrome. */
   .fc-kbd {
     @apply inline-block rounded border border-bark bg-ink px-1.5 py-0.5 text-[10px] leading-none text-paper-dim align-middle;
