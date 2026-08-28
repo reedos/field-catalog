@@ -15,7 +15,7 @@ import ShortcutsOverlay from "./components/ShortcutsOverlay";
 import CommandPalette from "./components/CommandPalette";
 import BulkLocationModal from "./components/BulkLocationModal";
 import { isTypingTarget, loadKeys, matches, saveKeys } from "./lib/keys";
-import { isTauri } from "./lib/preview";
+import { isTauri, previewUrl } from "./lib/preview";
 import { api, onWorkerProgress } from "./lib/worker";
 import { useViewHistory } from "./hooks/useViewHistory";
 import { normalizeShot, useShots } from "./hooks/useShots";
@@ -206,6 +206,24 @@ export default function App() {
 
   const navList = burstReviewId ? burstMembers : filtered;
   const selectedIndex = navList.findIndex((s) => s.id === selectedId);
+
+  // Warm the next frames while this one is being judged -- image decode is the
+  // last visible latency in the j/k loop now that the worker answers in ~1ms.
+  const prefetched = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (selectedIndex < 0) return;
+    for (const offset of [1, 2, -1]) {
+      const shot = navList[selectedIndex + offset];
+      if (!shot) continue;
+      const src = previewUrl(shot.preview_path);
+      if (!src || prefetched.current.has(src)) continue;
+      if (prefetched.current.size > 300) prefetched.current.clear();
+      prefetched.current.add(src);
+      const img = new window.Image();
+      img.decoding = "async";
+      img.src = src;
+    }
+  }, [selectedIndex, navList]);
   const burstMeta = useMemo(() => {
     const groups = new Map<string, Shot[]>();
     for (const s of shots) {

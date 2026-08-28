@@ -24,6 +24,18 @@ export default function CompareView(props: {
     [props.members],
   );
 
+  // Same ranking the worker's burst_pick uses; shown as a starting hypothesis.
+  const recommendedId = useMemo(() => {
+    if (visible.length < 2) return null;
+    return [...visible].sort(
+      (a, b) =>
+        (b.sharpness ?? -1) - (a.sharpness ?? -1) ||
+        (b.quality ?? -1) - (a.quality ?? -1) ||
+        b.stars - a.stars ||
+        Number(b.favorite) - Number(a.favorite),
+    )[0]?.id ?? null;
+  }, [visible]);
+
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const focused = visible.find((m) => m.id === focusedId) ?? visible[0] ?? null;
 
@@ -230,6 +242,11 @@ export default function CompareView(props: {
                   {shot.verdict === "keep" ? (
                     <span className="absolute left-2 top-2 rounded-sm bg-moss px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-paper shadow-sm">
                       keep
+                    </span>
+                  ) : null}
+                  {shot.id === recommendedId ? (
+                    <span className="absolute right-2 top-2 rounded-sm border border-ochre bg-ink/70 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-ochre">
+                      pick
                     </span>
                   ) : null}
                 </div>
