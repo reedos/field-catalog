@@ -59,7 +59,8 @@ export const api = {
 
   init: () => runWorker(["init"]),
 
-  list: () => runWorker<ListResult>(["list"]) as Promise<ListResult>,
+  list: (limit?: number) =>
+    runWorker<ListResult>(limit ? ["list", "--limit", String(limit)] : ["list"]) as Promise<ListResult>,
 
   fieldMarks: (limit = 200) =>
     runWorker<{ marks: string[] }>(["field-marks", "--limit", String(limit)]),

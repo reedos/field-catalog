@@ -32,6 +32,8 @@ type HeaderRow = {
   day: string;
   count: number;
   unrated: number;
+  keep: number;
+  reject: number;
   location: string;
   height: number;
 };
@@ -90,6 +92,8 @@ function packRows(
         day: sec.day,
         count: sec.shots.length,
         unrated: sec.shots.filter((s) => s.verdict === "unrated").length,
+        keep: sec.shots.filter((s) => s.verdict === "keep").length,
+        reject: sec.shots.filter((s) => s.verdict === "reject").length,
         location: commonLocation(sec.shots),
         height: HEADER_H,
       },
@@ -258,10 +262,18 @@ export default function Grid(props: {
                 style={{ transform: `translateY(${vRow.start}px)`, height: row.height, width: "100%" }}
               >
                 <div className="font-serif text-base tracking-wide text-paper">{fmtDay(row.day)}</div>
-                <div className="text-xs text-paper-dim">
-                  {row.count} shot{row.count === 1 ? "" : "s"}
-                  {row.unrated ? ` · ${row.unrated} unrated` : " · culled"}
-                  {row.location ? ` · ${row.location}` : ""}
+                <div className="flex items-baseline gap-2 text-xs text-paper-dim">
+                  <span>
+                    {row.count} shot{row.count === 1 ? "" : "s"}
+                    {row.location ? ` · ${row.location}` : ""}
+                  </span>
+                  {row.unrated ? (
+                    <span>· {row.unrated} unrated</span>
+                  ) : (
+                    <span className="text-moss">· culled</span>
+                  )}
+                  {row.keep ? <span className="text-moss">{row.keep} keep</span> : null}
+                  {row.reject ? <span className="text-reject">{row.reject} reject</span> : null}
                 </div>
                 {row.unrated && props.onCullDay ? (
                   <button

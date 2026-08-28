@@ -4,9 +4,6 @@
 - [ ] Pending-deletes quick view: show count in Toolbar badge, open dry-run dialog directly
 - [ ] "Pending" toolbar button is a duplicate of "Delete rejected" — give it its own
       handler or remove it
-- [ ] Accessibility pass: no `role="dialog"` or focus trap on any modal;
-      `text-paper-dim` on `bg-paper` is unreadable in the shortcuts overlay and
-      command palette; grid has no ARIA structure and no Enter-to-open
 - [ ] Ship off this machine. Two halves:
       - [x] Runtime lookup: `find_cli()` now checks beside the app executable and
             `resources/` before falling back to the dev venv, so an installed app
@@ -19,11 +16,8 @@
             Adds a build step and roughly 40-80 MB to the installer.
 
 ## Medium
-- [ ] Outing headers could show a per-outing keep/reject summary once culled
 - [ ] Meter component: ensure gradient renders on all browsers
 - [ ] Life list: filter by verdict (counts per species are already shown)
-- [ ] `api.list()` still fetches every row. `--limit` and `truncated` work now, so
-      pagination is a decision rather than a missing feature.
 - [ ] `tags` serializes comma-joined while `field_marks` and `similar_species` use
       JSON, so a tag containing a comma would split. Nothing in the UI reads `tags`,
       so this is a latent inconsistency rather than a live bug.
@@ -39,9 +33,15 @@
 - [ ] Vite dev deps install reliably on Windows
 - [ ] Import dedupe is path-based, so a moved or renamed original re-imports as a new
       shot and orphans the old row
-- [ ] `xai.key` is written plaintext with default permissions
 
 ## Done
+- [x] Accessibility: dialog semantics and focus trapping on all five overlays,
+      grid listbox/option roles, Enter-to-open, labelled star rating, live region
+      for busy text
+- [x] Two-phase library load: newest 400 paint first, the rest merges in behind
+      (filtering and sorting stay client-side over the whole library)
+- [x] Per-outing keep/reject summary in the day headers
+- [x] `xai.key` written 0600 where the platform honours it
 - [x] Outings: capture-day headers in the grid with cull-this-outing, a day filter
       in the filter bar, day as part of view history
 - [x] Preview prefetch around the selection; compare view badges the recommended pick

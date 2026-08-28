@@ -28,13 +28,22 @@ export function useShots(onError: (e: unknown) => void) {
   const shotsByIdRef = useRef(shotsById);
   shotsByIdRef.current = shotsById;
 
+  // The full list is ~150ms and 5.5MB at 4k shots, and grows linearly. The
+  // newest page paints first so the grid is usable immediately; the rest
+  // arrives behind it, which keeps filtering and sorting client-side over the
+  // whole library rather than paginating the UI.
+  const FIRST_PAGE = 400;
+
   const reload = useCallback(async () => {
-    const listed = await api.list();
-    setShots((listed.shots || []).map(normalizeShot));
+    const first = await api.list(FIRST_PAGE);
+    setShots((first.shots || []).map(normalizeShot));
     // Suggestion vocabulary is a nice-to-have; never fail a reload over it.
     api.fieldMarks()
       .then((res) => setCatalogFieldMarks(res.marks || []))
       .catch(() => {});
+    if (!first.truncated) return;
+    const all = await api.list();
+    setShots((all.shots || []).map(normalizeShot));
   }, []);
 
   function patchShot(id: string, partial: Partial<Shot>) {
