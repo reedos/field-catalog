@@ -17,6 +17,7 @@ import { fmtBytes } from "./lib/format";
 import { isTypingTarget, loadKeys, matches, saveKeys } from "./lib/keys";
 import { isTauri } from "./lib/preview";
 import { api, onWorkerProgress } from "./lib/worker";
+import { useViewHistory } from "./hooks/useViewHistory";
 import {
   COLOR_CYCLE,
   type AnimalType,
@@ -67,44 +68,25 @@ export default function App() {
   const [identifyBackend, setIdentifyBackend] = useState<"ollama" | "xai">("ollama");
   const [ollamaModel, setOllamaModel] = useState("muse-glimmer:30b");
   const searchRef = useRef<HTMLInputElement>(null);
-  const [history, setHistory] = useState<ViewState[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [showBulkLocation, setShowBulkLocation] = useState(false);
 
-  // Hydrate history from sessionStorage on start
-  useEffect(() => {
-    try {
-      const h = sessionStorage.getItem('fc_history');
-      const i = sessionStorage.getItem('fc_historyIndex');
-      if (h && i) {
-        const parsed = JSON.parse(h) as ViewState[];
-        const idx = parseInt(i, 10);
-        if (Array.isArray(parsed) && idx >= 0 && idx < parsed.length) {
-          setHistory(parsed);
-          setHistoryIndex(idx);
-          const s = parsed[idx];
-          setView(s.view);
-          setSearch(s.search);
-          setAnimal(s.animal);
-          setLocation(s.location);
-          setStarsMin(s.starsMin);
-          setVerdictFilter(s.verdict);
-          setNeedsId(s.needsId);
-          setSort(s.sort);
-        }
-      }
-    } catch {}
-  }, []);
+  // The composite view state, as one value, for history and the palette.
+  const currentViewState: ViewState = { view, search, animal, location, starsMin, verdict, needsId, sort };
 
-  // Persist history to sessionStorage
-  useEffect(() => {
-    try {
-      sessionStorage.setItem('fc_history', JSON.stringify(history));
-      sessionStorage.setItem('fc_historyIndex', String(historyIndex));
-    } catch {}
-  }, [history, historyIndex]);
+  function applyState(state: ViewState) {
+    setView(state.view);
+    setSearch(state.search);
+    setAnimal(state.animal);
+    setLocation(state.location);
+    setStarsMin(state.starsMin);
+    setVerdictFilter(state.verdict);
+    setNeedsId(state.needsId);
+    setSort(state.sort);
+  }
+
+  const nav = useViewHistory(currentViewState, applyState);
 
   const reload = useCallback(async () => {
     const listed = await api.list();
@@ -131,17 +113,6 @@ export default function App() {
         if (key.ollama_model) setOllamaModel(key.ollama_model);
         await reload();
         setReady(true);
-        setHistory((prev) => (prev.length ? prev : [{
-          view: "library",
-          search: "",
-          animal: "",
-          location: "",
-          starsMin: 0,
-          verdict: "",
-          needsId: false,
-          sort: "captured_at",
-        }]));
-        setHistoryIndex((i) => (i < 0 ? 0 : i));
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -508,12 +479,12 @@ export default function App() {
       }
       if (e.altKey && e.key === "ArrowLeft") {
         e.preventDefault();
-        goBack();
+        nav.goBack();
         return;
       }
       if (e.altKey && e.key === "ArrowRight") {
         e.preventDefault();
-        goForward();
+        nav.goForward();
         return;
       }
       if (matches(e, keys.close)) {
@@ -708,8 +679,8 @@ export default function App() {
   }
 
   async function onView(v: View) {
-    pushHistory();
     setView(v);
+    nav.record({ view: v });
     if (v === "bursts") await loadBursts();
   }
 
@@ -719,69 +690,6 @@ export default function App() {
   }
 
   
-  const canGoBack = historyIndex > 0;
-  const canGoForward = historyIndex >= 0 && historyIndex < history.length - 1;
-
-  function pushHistory() {
-    const state: ViewState = {
-      view,
-      search,
-      animal,
-      location,
-      starsMin,
-      verdict,
-      needsId,
-      sort,
-    };
-    setHistory((prev) => {
-      const trimmed = prev.slice(0, historyIndex + 1);
-      const last = trimmed[trimmed.length - 1];
-      if (last && historyLabel(last) === historyLabel(state) && last.view === state.view && last.search === state.search && last.animal === state.animal && last.location === state.location && last.verdict === state.verdict && last.needsId === state.needsId && last.sort === state.sort && last.starsMin === state.starsMin) {
-        return prev;
-      }
-      const next = [...trimmed, state];
-      return next.length > 16 ? next.slice(next.length - 16) : next;
-    });
-    setHistoryIndex((i) => Math.min(15, i + 1));
-  }
-
-  function goBack() {
-    if (historyIndex <= 0) return;
-    const newIndex = historyIndex - 1;
-    const state = history[newIndex];
-    if (!state) return;
-    applyState(state);
-    setHistoryIndex(newIndex);
-  }
-
-  function goForward() {
-    if (!canGoForward) return;
-    const newIndex = historyIndex + 1;
-    const state = history[newIndex];
-    if (!state) return;
-    applyState(state);
-    setHistoryIndex(newIndex);
-  }
-
-  function applyState(state: ViewState) {
-    setView(state.view);
-    setSearch(state.search);
-    setAnimal(state.animal);
-    setLocation(state.location);
-    setStarsMin(state.starsMin);
-    setVerdictFilter(state.verdict);
-    setNeedsId(state.needsId);
-    setSort(state.sort);
-  }
-
-  function goToHistory(idx: number) {
-    if (idx < 0 || idx >= history.length) return;
-    const state = history[idx];
-    if (!state) return;
-    applyState(state);
-    setHistoryIndex(idx);
-  }
-
 const verdicts = useMemo(() => {
     const v = { keep: 0, reject: 0, unrated: 0 };
     for (const s of shots) v[s.verdict] += 1;
@@ -792,14 +700,14 @@ const verdicts = useMemo(() => {
     <div className="h-full flex flex-col bg-ink text-paper">
       <Toolbar
         view={view}
-        onBack={() => void goBack()}
-        onForward={() => void goForward()}
-        canGoBack={canGoBack}
-        canGoForward={canGoForward}
-        backTo={canGoBack && history[historyIndex - 1] ? historyLabel(history[historyIndex - 1]) : undefined}
-        history={history}
-        historyIndex={historyIndex}
-        onJump={(idx) => void goToHistory(idx)}
+        onBack={() => nav.goBack()}
+        onForward={() => nav.goForward()}
+        canGoBack={nav.canGoBack}
+        canGoForward={nav.canGoForward}
+        backTo={nav.backLabel}
+        history={nav.entries}
+        historyIndex={nav.index}
+        onJump={(idx) => nav.goTo(idx)}
         onView={(v) => void onView(v)}
         onImport={() => void onImport()}
         onDelete={() => void openDelete()}
@@ -823,34 +731,34 @@ const verdicts = useMemo(() => {
           onSearch={setSearch}
           animal={animal}
           onAnimal={(v) => {
-            pushHistory();
             setAnimal(v);
+            nav.record({ animal: v });
           }}
           location={location}
           locations={locations}
           onLocation={(v) => {
-            pushHistory();
             setLocation(v);
+            nav.record({ location: v });
           }}
           starsMin={starsMin}
           onStarsMin={(v) => {
-            pushHistory();
             setStarsMin(v);
+            nav.record({ starsMin: v });
           }}
           verdict={verdict}
           onVerdict={(v) => {
-            pushHistory();
             setVerdictFilter(v);
+            nav.record({ verdict: v });
           }}
           sort={sort}
           onSort={(v) => {
-            pushHistory();
             setSort(v);
+            nav.record({ sort: v });
           }}
           needsId={needsId}
           onNeedsId={(v) => {
-            pushHistory();
             setNeedsId(v);
+            nav.record({ needsId: v });
           }}
         />
       ) : null}
@@ -896,9 +804,9 @@ const verdicts = useMemo(() => {
           <LifeList
             shots={shots}
             onOpenSpecies={(name) => {
-              pushHistory();
               setSearch(name);
               setView("library");
+              nav.record({ search: name, view: "library" });
             }}
           />
         ) : null}
@@ -1019,10 +927,10 @@ const verdicts = useMemo(() => {
       )}
       {showPalette && (
         <CommandPalette
-          history={history}
-          historyIndex={historyIndex}
-          onView={(v) => { onView(v); setShowPalette(false); }}
-          onJump={(idx) => { goToHistory(idx); setShowPalette(false); }}
+          history={nav.entries}
+          historyIndex={nav.index}
+          onView={(v) => { void onView(v); setShowPalette(false); }}
+          onJump={(idx) => { nav.goTo(idx); setShowPalette(false); }}
           onClose={() => setShowPalette(false)}
         />
       )}
@@ -1069,21 +977,6 @@ const verdicts = useMemo(() => {
       ) : null}
     </div>
   );
-}
-
-function historyLabel(s: ViewState): string {
-  const names: Record<string, string> = {
-    library: "Library",
-    map: "Map",
-    bursts: "Bursts",
-    life: "Life list",
-    settings: "Settings",
-  };
-  const bits = [names[s.view] || s.view];
-  if (s.search) bits.push(s.search);
-  else if (s.animal) bits.push(s.animal);
-  else if (s.location) bits.push(s.location);
-  return bits.join(" · ");
 }
 
 function normalizeShot(s: Shot): Shot {
