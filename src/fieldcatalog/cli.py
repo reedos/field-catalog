@@ -128,6 +128,19 @@ def cmd_import(ns: argparse.Namespace) -> int:
     return _out(True, **result)
 
 
+def cmd_backup(ns: argparse.Namespace) -> int:
+    from .maintenance import backup_catalog
+
+    return _out(True, **backup_catalog(_catalog(ns)))
+
+
+def cmd_doctor(ns: argparse.Namespace) -> int:
+    from .maintenance import run_doctor
+
+    result = run_doctor(_catalog(ns), fix=ns.fix, progress=_stderr_progress("doctor", every=200))
+    return _out(True, **result)
+
+
 def cmd_backfill_dimensions(ns: argparse.Namespace) -> int:
     cat = _catalog(ns)
     result = backfill_dimensions(cat, progress=_stderr_progress("dimensions", every=500))
@@ -379,6 +392,7 @@ def _unlink_cmd(ns: argparse.Namespace, action: str) -> int:
             execute=ns.execute,
             allow_any_verdict=ns.allow_any_verdict,
             permanent=ns.permanent,
+            skip_backup=ns.no_backup,
         )
     except DiskError as e:
         return _out(False, error=str(e))
@@ -525,11 +539,23 @@ def build_parser() -> argparse.ArgumentParser:
             action="store_true",
             help="bypass the recycle bin and unlink outright",
         )
+        sp.add_argument(
+            "--no-backup",
+            action="store_true",
+            help="skip the automatic catalog backup before --execute",
+        )
         sp.set_defaults(func=handler)
 
     fm = sub.add_parser("field-marks", help="list distinct field marks")
     fm.add_argument("--limit", type=int, default=200)
     fm.set_defaults(func=cmd_field_marks)
+
+    bk = sub.add_parser("backup", help="copy the catalog into library/backups, keeping the newest few")
+    bk.set_defaults(func=cmd_backup)
+
+    dr = sub.add_parser("doctor", help="library integrity report; --fix runs the safe backfills")
+    dr.add_argument("--fix", action="store_true", help="backfill missing dimensions and content hashes")
+    dr.set_defaults(func=cmd_doctor)
 
     bd = sub.add_parser("backfill-dimensions", help="fill preview sizes for rows imported before they were stored")
     bd.set_defaults(func=cmd_backfill_dimensions)
@@ -545,7 +571,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 # Commands that can run for minutes. They get their own lane so a verdict typed
 # mid-import answers immediately instead of queueing behind it.
-SLOW_COMMANDS = {"identify", "import", "refresh-previews", "backfill-dimensions"}
+SLOW_COMMANDS = {"identify", "import", "refresh-previews", "backfill-dimensions", "doctor"}
 
 
 def serve_loop(library: str, stdin, stdout) -> None:

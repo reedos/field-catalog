@@ -771,3 +771,142 @@ def test_subsecond_exif_appended():
     b = Shot(id="b", original_path="b", preview_path="b", captured_at="2026-08-23T09:00:01.50")
     assign_bursts([a, b])
     assert a.burst_id == b.burst_id
+
+
+# --- backup / doctor / content identity --------------------------------------
+
+
+def test_backup_creates_and_rotates(tmp_path: Path):
+    from fieldcatalog.maintenance import backup_catalog
+
+    cat = Catalog(tmp_path / "library")
+    cat.upsert(Shot(id="a", original_path="a.jpg", preview_path="a.jpg", verdict="keep"))
+
+    first = backup_catalog(cat)
+    assert Path(first["path"]).is_file()
+    assert first["bytes"] > 0
+
+    # The backup is a readable catalog holding the same rows.
+    import sqlite3
+
+    conn = sqlite3.connect(first["path"])
+    assert conn.execute("SELECT COUNT(*) FROM shots").fetchone()[0] == 1
+    conn.close()
+
+    for _ in range(7):
+        backup_catalog(cat)
+    backups = list((tmp_path / "library" / "backups").glob("catalog-*.sqlite"))
+    assert len(backups) == 5  # rotation holds the newest five
+
+
+def test_delete_execute_backs_up_first(tmp_path: Path):
+    cat, ids, originals = _library_with_shots(tmp_path, 1)
+    backups_dir = tmp_path / "library" / "backups"
+    assert not backups_dir.exists()
+    done = unlink_originals(
+        cat, ids, action="delete", confirm=CONFIRM_DELETE, execute=True, permanent=True
+    )
+    assert done["backup"] and Path(done["backup"]).is_file()
+    assert list(backups_dir.glob("catalog-*.sqlite"))
+    # The backup was taken BEFORE the unlink: it still shows the original present.
+    import sqlite3
+
+    conn = sqlite3.connect(done["backup"])
+    status = conn.execute("SELECT original_status FROM shots WHERE id = ?", (ids[0],)).fetchone()[0]
+    conn.close()
+    assert status == "present"
+    assert not originals[0].is_file()
+
+
+def test_backup_failure_aborts_the_delete(tmp_path: Path, monkeypatch):
+    import fieldcatalog.maintenance as maintenance
+
+    cat, ids, originals = _library_with_shots(tmp_path, 1)
+    monkeypatch.setattr(
+        maintenance, "backup_catalog", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full"))
+    )
+    try:
+        unlink_originals(cat, ids, action="delete", confirm=CONFIRM_DELETE, execute=True, permanent=True)
+        assert False, "should refuse to delete without a restore point"
+    except DiskError as e:
+        assert "backup" in str(e)
+    assert originals[0].is_file()  # nothing was unlinked
+
+    done = unlink_originals(
+        cat, ids, action="delete", confirm=CONFIRM_DELETE, execute=True, permanent=True, skip_backup=True
+    )
+    assert done["count"] == 1 and done["backup"] is None
+
+
+def test_import_relinks_a_moved_original(tmp_path: Path):
+    src = tmp_path / "card"
+    src.mkdir()
+    original = src / "DSC_0001.jpg"
+    Image.new("RGB", (200, 150), (40, 80, 40)).save(original, "JPEG")
+    cat = Catalog(tmp_path / "library")
+    sid = import_paths(cat, [original])["ids"][0]
+    cat.update(sid, verdict="keep", common_name="Steller's Jay")
+
+    # Move the file the way a user would in Explorer.
+    new_home = tmp_path / "sorted"
+    new_home.mkdir()
+    moved = new_home / "jay.jpg"
+    original.rename(moved)
+
+    result = import_paths(cat, [moved])
+    assert result == {**result, "imported": 0, "relinked": 1, "duplicates": 0}
+    shot = cat.get(sid)
+    assert Path(shot.original_path) == moved.resolve()
+    assert shot.original_status == "present"
+    assert shot.verdict == "keep" and shot.common_name == "Steller's Jay"
+    assert len(cat.list()) == 1  # no orphan row
+
+
+def test_import_skips_a_byte_identical_copy(tmp_path: Path):
+    import shutil
+
+    src = tmp_path / "card"
+    src.mkdir()
+    original = src / "DSC_0001.jpg"
+    Image.new("RGB", (200, 150), (40, 80, 40)).save(original, "JPEG")
+    cat = Catalog(tmp_path / "library")
+    import_paths(cat, [original])
+
+    copy = src / "DSC_0001 (copy).jpg"
+    shutil.copyfile(original, copy)
+    result = import_paths(cat, [copy])
+    assert result == {**result, "imported": 0, "duplicates": 1}
+    assert len(cat.list()) == 1
+
+
+def test_doctor_reports_and_fixes(tmp_path: Path):
+    from fieldcatalog.maintenance import run_doctor
+
+    src = tmp_path / "card"
+    src.mkdir()
+    for i in range(2):
+        Image.new("RGB", (200, 150), (i * 40, 80, 40)).save(src / f"DSC_{i}.jpg", "JPEG")
+    cat = Catalog(tmp_path / "library")
+    ids = import_paths(cat, sorted(src.glob("*.jpg")))["ids"]
+
+    # Manufacture problems: one original vanishes, one row loses hash + dims,
+    # and an orphan preview appears.
+    (src / "DSC_0.jpg").unlink()
+    cat.update(ids[1], content_hash=None, preview_width=None, preview_height=None)
+    (cat.previews / "orphan.jpg").write_bytes(b"\xff\xd8\xff\xd9")
+
+    report = run_doctor(cat)
+    assert report["integrity"] == "ok"
+    assert report["missing_originals"] == 1
+    assert report["orphaned_previews"] == 1
+    assert report["missing_dimensions"] == 1
+    assert report["missing_hashes"] == 1
+    assert report["fixed"] == {}
+    assert any("re-link" in h or "re-import" in h for h in report["hints"])
+
+    fixed = run_doctor(cat, fix=True)
+    assert fixed["fixed"] == {"dimensions": 1, "hashes": 1}
+    assert fixed["missing_dimensions"] == 0
+    assert fixed["missing_hashes"] == 0
+    # Fix never deletes: the orphan is still there, only reported.
+    assert (cat.previews / "orphan.jpg").is_file()

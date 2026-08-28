@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS shots (
   notes TEXT,
   gps_from_file INTEGER NOT NULL DEFAULT 0,
   preview_width INTEGER,
-  preview_height INTEGER
+  preview_height INTEGER,
+  content_hash TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_shots_verdict ON shots(verdict);
 CREATE INDEX IF NOT EXISTS idx_shots_status ON shots(original_status);
@@ -93,10 +94,15 @@ class Catalog:
             if col not in cols:
                 self.conn.execute(f"ALTER TABLE shots ADD COLUMN {col} INTEGER")
                 added = True
-        # list() orders by captured_at DESC on every library load.
+        if "content_hash" not in cols:
+            self.conn.execute("ALTER TABLE shots ADD COLUMN content_hash TEXT")
+            added = True
+        # These must come after the column migrations above -- an index in SCHEMA
+        # on a migrated column would run before the column exists on an old DB.
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_shots_captured ON shots(captured_at DESC)"
         )
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_shots_hash ON shots(content_hash)")
         if added:
             self.conn.commit()
 
@@ -126,6 +132,14 @@ class Catalog:
     def get(self, shot_id: str) -> Shot | None:
         row = self.conn.execute("SELECT * FROM shots WHERE id = ?", (shot_id,)).fetchone()
         return Shot.from_row(row) if row else None
+
+    def by_hash(self, content_hash: str) -> list[Shot]:
+        if not content_hash:
+            return []
+        rows = self.conn.execute(
+            "SELECT * FROM shots WHERE content_hash = ?", (content_hash,)
+        ).fetchall()
+        return [Shot.from_row(r) for r in rows]
 
     def by_original(self, path: str) -> Shot | None:
         row = self.conn.execute(

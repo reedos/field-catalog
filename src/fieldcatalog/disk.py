@@ -99,6 +99,7 @@ def unlink_originals(
     execute: bool,
     allow_any_verdict: bool = False,
     permanent: bool = False,
+    skip_backup: bool = False,
 ) -> dict:
     if action not in ("delete", "offload"):
         raise DiskError("action must be delete or offload")
@@ -145,6 +146,19 @@ def unlink_originals(
             "disposal": "unlink" if permanent else "trash",
         }
 
+    # The catalog is the record of every culling decision; the delete is the
+    # highest-stakes moment, so it always gets a restore point first.
+    backup_path = None
+    if not skip_backup:
+        from .maintenance import backup_catalog
+
+        try:
+            backup_path = backup_catalog(catalog)["path"]
+        except Exception as e:
+            raise DiskError(
+                f"backup before {action} failed: {e}; pass --no-backup to proceed without one"
+            ) from e
+
     done = []
     disposals = set()
     for item in planned:
@@ -167,6 +181,7 @@ def unlink_originals(
         "previews_kept": True,
         "allow_any_verdict": allow_any_verdict,
         "disposal": sorted(disposals),
+        "backup": backup_path,
     }
 
     # The files are already gone by here. A failure to write the log must not be

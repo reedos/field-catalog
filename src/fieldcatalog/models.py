@@ -47,6 +47,7 @@ class Shot:
     gps_from_file: bool = False
     preview_width: Optional[int] = None
     preview_height: Optional[int] = None
+    content_hash: Optional[str] = None
 
     def to_row(self) -> dict[str, Any]:
         d = asdict(self)
@@ -97,6 +98,7 @@ class Shot:
             gps_from_file=bool(_col(row, "gps_from_file") or 0),
             preview_width=_col(row, "preview_width"),
             preview_height=_col(row, "preview_height"),
+            content_hash=_col(row, "content_hash"),
         )
 
 

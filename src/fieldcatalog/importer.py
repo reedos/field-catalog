@@ -8,6 +8,7 @@ from .animal import infer_animal_type
 from .bursts import assign_bursts
 from .catalog import Catalog
 from .exif import parse_exif_many
+from .maintenance import content_hash
 from .models import Shot
 from PIL import Image
 
@@ -26,6 +27,8 @@ def walk_photos(source: Path) -> list[Path]:
 def import_paths(catalog: Catalog, paths: list[Path], *, progress=None) -> dict:
     imported: list[Shot] = []
     skipped = 0
+    relinked = 0
+    duplicates = 0
     errors: list[dict] = []
     total = len(paths)
 
@@ -41,6 +44,32 @@ def import_paths(catalog: Catalog, paths: list[Path], *, progress=None) -> dict:
         if catalog.by_original(resolved):
             skipped += 1
             continue
+        # Content identity before any work: a moved original re-links to its
+        # existing row (verdicts, IDs, and field marks intact) instead of
+        # importing as a stranger and orphaning the old row; a byte-identical
+        # copy at a second path is skipped as a duplicate.
+        try:
+            chash = content_hash(path)
+        except OSError as e:
+            errors.append({"path": resolved, "error": str(e)})
+            continue
+        matched = catalog.by_hash(chash)
+        moved = next((m for m in matched if not Path(m.original_path).is_file()), None)
+        if moved is not None:
+            catalog.update(
+                moved.id,
+                original_path=resolved,
+                original_status="present",
+                bytes_original=path.stat().st_size,
+            )
+            if not Path(moved.preview_path).is_file():
+                write_preview(path, Path(moved.preview_path))
+            relinked += 1
+            continue
+        if matched:
+            duplicates += 1
+            continue
+
         shot_id = str(uuid.uuid4())
         preview = catalog.preview_file(shot_id)
         try:
@@ -77,6 +106,7 @@ def import_paths(catalog: Catalog, paths: list[Path], *, progress=None) -> dict:
             gps_from_file=meta.get("lat") is not None and meta.get("lon") is not None,
             preview_width=preview_w,
             preview_height=preview_h,
+            content_hash=chash,
         )
         catalog.upsert(shot)
         imported.append(shot)
@@ -93,6 +123,8 @@ def import_paths(catalog: Catalog, paths: list[Path], *, progress=None) -> dict:
     return {
         "imported": len(imported),
         "skipped": skipped,
+        "relinked": relinked,
+        "duplicates": duplicates,
         "errors": errors,
         "ids": [s.id for s in imported],
         "bursts_rewritten": len(changed),
