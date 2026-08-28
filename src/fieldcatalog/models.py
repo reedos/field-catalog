@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, Optional
 
@@ -39,11 +40,19 @@ class Shot:
     tags: list[str] = field(default_factory=list)
     caption: str = ""
     bytes_original: int = 0
+    confidence: Optional[float] = None
+    field_marks: list[str] = field(default_factory=list)
+    similar_species: list[str] = field(default_factory=list)
+    notes: str = ""
+    gps_from_file: bool = False
 
     def to_row(self) -> dict[str, Any]:
         d = asdict(self)
         d["favorite"] = int(self.favorite)
+        d["gps_from_file"] = int(self.gps_from_file)
         d["tags"] = ",".join(self.tags)
+        d["field_marks"] = json.dumps(self.field_marks)
+        d["similar_species"] = json.dumps(self.similar_species)
         return d
 
     @classmethod
@@ -79,4 +88,34 @@ class Shot:
             tags=tags,
             caption=row["caption"] or "",
             bytes_original=row["bytes_original"] or 0,
+            confidence=_col(row, "confidence"),
+            field_marks=_marks(_col(row, "field_marks")),
+            similar_species=_marks(_col(row, "similar_species")),
+            notes=_col(row, "notes") or "",
+            gps_from_file=bool(_col(row, "gps_from_file") or 0),
         )
+
+
+def _col(row: Any, key: str, default: Any = None) -> Any:
+    try:
+        if key in row.keys():
+            return row[key]
+    except Exception:
+        pass
+    return default
+
+
+def _marks(raw: Any) -> list[str]:
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [str(x) for x in raw if str(x).strip()]
+    text = str(raw).strip()
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return [str(x) for x in parsed if str(x).strip()]
+        except json.JSONDecodeError:
+            pass
+    return [p.strip() for p in text.replace("\n", "|").split("|") if p.strip()]

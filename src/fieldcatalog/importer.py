@@ -68,6 +68,7 @@ def import_paths(catalog: Catalog, paths: list[Path]) -> dict:
             burst_id=f"burst-{shot_id}",
             bytes_original=path.stat().st_size,
             animal_type=infer_animal_type(path.stem),
+            gps_from_file=meta.get("lat") is not None and meta.get("lon") is not None,
         )
         catalog.upsert(shot)
         imported.append(shot)

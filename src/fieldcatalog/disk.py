@@ -89,15 +89,15 @@ def unlink_originals(
             }
         )
 
-    if not execute:
-        return {
-            "dry_run": True,
-            "action": action,
-            "count": len(planned),
-            "bytes": sum(p["bytes"] for p in planned),
-            "files": planned,
-            "errors": errors,
-        }
+        if not execute:
+            return {
+                "dry_run": True,
+                "action": action,
+                "count": len(planned),
+                "bytes": sum(p["bytes"] for p in planned),
+                "files": planned,
+                "errors": errors,
+            }
 
     done = []
     for item in planned:
@@ -109,6 +109,7 @@ def unlink_originals(
         except OSError as e:
             errors.append({"id": item["id"], "error": str(e)})
 
+    audit_log(catalog.library, action, [i["id"] for i in done], len(done), sum(p["bytes"] for p in done))
     return {
         "dry_run": False,
         "action": action,
@@ -118,3 +119,16 @@ def unlink_originals(
         "errors": errors,
         "previews_kept": True,
     }
+
+def audit_log(library: Path, action: str, ids: list[str], count: int, bytes_total: int) -> None:
+    import json, datetime
+    log_path = Path(library).expanduser() / "audit.jsonl"
+    entry = {
+        "ts": datetime.datetime.utcnow().isoformat() + "Z",
+        "action": action,
+        "ids": ids,
+        "count": count,
+        "bytes": bytes_total
+    }
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")

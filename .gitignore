@@ -3,3 +3,12 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 *.pyc
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+ui/dist/
+xai.key
+*.key
+secrets.json
+geocode-cache.json

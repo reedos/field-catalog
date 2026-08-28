@@ -46,6 +46,18 @@ fieldcatalog --library ~/FieldCatalog offload-originals --ids id1 --confirm OFFL
 
 Every command prints `{"ok": true|false, ...}`. Tauri should parse stdout JSON only.
 
+## Desktop (Tauri 2)
+
+```bash
+npm install
+npm --prefix ui install
+npm run tauri -- dev
+```
+
+Web-only while iterating: `npm --prefix ui run dev` then open http://localhost:1420/ (spawns the same CLI).
+
+Library: `%USERPROFILE%\FieldCatalog`. Cull keys default to J/K next-prev, P keep, X reject, U unrated. Reject does not delete. Delete/offload always dry-run, then confirm `DELETE_ORIGINALS` / `OFFLOAD_ORIGINALS`.
+
 ## Rules the UI must not violate
 
 - Never call `--execute` without showing `files` from a dry-run first.
