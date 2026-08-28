@@ -204,14 +204,13 @@ def cmd_set_location_by_date(ns: argparse.Namespace) -> int:
             geo = geocode_label(label, library=cat.library)
         except GeocodeError as e:
             geo_error = str(e)
-    updated = 0
-    for s in shots:
-        fields: dict[str, object] = {"location": label}
-        if geo and not s.gps_from_file:
-            fields["lat"] = geo[0]
-            fields["lon"] = geo[1]
-        cat.update(s.id, **fields)
-        updated += 1
+    # Two groups, two statements -- shots carrying their own GPS keep it and
+    # only take the label. One committed UPDATE per shot was the old cost here.
+    pinned = [s.id for s in shots if geo and not s.gps_from_file]
+    label_only = [s.id for s in shots if not (geo and not s.gps_from_file)]
+    updated = cat.update_many(label_only, location=label)
+    if geo:
+        updated += cat.update_many(pinned, location=label, lat=geo[0], lon=geo[1])
     payload = {
         "count": updated,
         "date": day,

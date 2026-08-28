@@ -163,6 +163,18 @@ class Catalog:
         self.conn.commit()
         return self.get(shot_id)
 
+    def update_many(self, ids: list[str], **fields: object) -> int:
+        """Apply the same field values to many rows in one transaction."""
+        if not ids or not fields:
+            return 0
+        assignments = ",".join(f"{k} = ?" for k in fields)
+        self.conn.executemany(
+            f"UPDATE shots SET {assignments} WHERE id = ?",
+            [[*fields.values(), shot_id] for shot_id in ids],
+        )
+        self.conn.commit()
+        return len(ids)
+
     def set_burst_ids(self, pairs: list[tuple[str, str]]) -> int:
         """Write many burst ids in one transaction. Returns the number of rows written."""
         if not pairs:

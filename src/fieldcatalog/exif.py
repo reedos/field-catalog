@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +30,20 @@ def _dms(values: Any, ref: str | None) -> float | None:
         return deg
     except Exception:
         return None
+
+
+def _shutter(value: Any) -> str:
+    """Format an exposure time the same way whether it came from exiftool or PIL.
+
+    exiftool runs with -n, so it hands back a bare float like 0.008 where PIL
+    yields a rational. Both must render as "1/125".
+    """
+    seconds = _rational(value)
+    if seconds is None or seconds <= 0:
+        return str(value)
+    if seconds < 1:
+        return f"1/{round(1 / seconds)}"
+    return f"{seconds:g}"
 
 
 def _empty() -> dict[str, Any]:
@@ -105,7 +119,7 @@ def _exiftool(path: Path) -> dict[str, Any] | None:
     except (TypeError, ValueError):
         pass
     if row.get("ShutterSpeed") is not None:
-        out["shutter"] = str(row["ShutterSpeed"])
+        out["shutter"] = _shutter(row["ShutterSpeed"])
     if row.get("FNumber") is not None:
         out["aperture"] = f"f/{row['FNumber']}"
     if row.get("FocalLength") is not None:
@@ -143,7 +157,7 @@ def _pil(path: Path) -> dict[str, Any]:
                     pass
             r = _rational(named.get("ExposureTime"))
             if r:
-                out["shutter"] = f"1/{round(1 / r)}" if r < 1 else f"{r:g}"
+                out["shutter"] = _shutter(r)
             fnum = _rational(named.get("FNumber"))
             if fnum:
                 out["aperture"] = f"f/{fnum:g}"
@@ -170,8 +184,25 @@ def _pil(path: Path) -> dict[str, Any]:
 
 def parse_exif(path: Path) -> dict[str, Any]:
     """Read GPS/time/camera from the file. Never invents coordinates or a place name."""
-    out = _exiftool(path) or _pil(path)
+    out = _exiftool(path)
+    if out is None:
+        out = _pil(path)
+    elif not _complete(out):
+        # exiftool returning a dict does not mean it filled it in. Merge PIL in
+        # field by field rather than letting a sparse exiftool result win.
+        for key, value in _pil(path).items():
+            if out.get(key) in (None, "") and value not in (None, ""):
+                out[key] = value
     if not out.get("captured_at"):
-        mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-        out["captured_at"] = mtime.replace(tzinfo=None).isoformat()
+        # EXIF timestamps are naive local time, so the mtime fallback has to be
+        # local too -- a UTC value here would shift the shot into another day
+        # and out of its burst.
+        out["captured_at"] = datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds")
     return out
+
+
+def _complete(meta: dict[str, Any]) -> bool:
+    """Did exiftool actually understand the file? GPS is legitimately absent on
+    most frames, so it is not part of the test -- requiring it would run PIL a
+    second time over the whole library for nothing."""
+    return all(meta.get(k) not in (None, "") for k in ("captured_at", "camera"))

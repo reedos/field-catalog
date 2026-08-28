@@ -6,6 +6,7 @@ from PIL import Image, ImageOps
 
 RAW_SUFFIXES = {".nef", ".cr2", ".cr3", ".arw", ".raf", ".orf", ".rw2", ".dng"}
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"} | RAW_SUFFIXES
+MIN_EMBEDDED_JPEG = 20_000
 
 
 def is_photo(path: Path) -> bool:
@@ -28,7 +29,9 @@ def extract_embedded_jpeg(path: Path) -> bytes | None:
         if best is None or len(blob) > len(best):
             best = blob
         start = i + 3
-    return best if best and len(best) > 20_000 else best
+    # Below ~20KB this is a contact-sheet thumbnail, not something you can cull
+    # from. Better to fail the import than to file a 160x120 preview.
+    return best if best and len(best) > MIN_EMBEDDED_JPEG else None
 
 
 def apply_orientation(img: Image.Image) -> Image.Image:

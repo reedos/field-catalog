@@ -1,5 +1,10 @@
+import json
+from datetime import datetime
+from fractions import Fraction
+from io import BytesIO
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 from fieldcatalog.animal import infer_animal_type
@@ -313,3 +318,134 @@ def test_pending_defaults_to_rejects_only(tmp_path: Path):
     assert len(pending(cat, verdict="")) == 2       # empty means reject, not everything
     assert len(pending(cat, verdict="keep")) == 1
     assert len(pending(cat, all_verdicts=True)) == 3
+
+
+# --- exif / preview correctness ---------------------------------------------
+
+
+def test_shutter_formats_the_same_from_either_source():
+    """exiftool -n hands back a float where PIL hands back a rational."""
+    from fieldcatalog.exif import _shutter
+
+    assert _shutter(0.008) == "1/125"
+    assert _shutter(Fraction(1, 125)) == "1/125"
+    assert _shutter(2.0) == "2"
+    assert _shutter(0) == "0"
+
+
+def test_mtime_fallback_is_local_not_utc(tmp_path: Path):
+    """A UTC fallback would shift the shot into another capture day."""
+    from fieldcatalog.exif import parse_exif
+
+    p = tmp_path / "no_exif.png"
+    Image.new("RGB", (10, 10), (1, 2, 3)).save(p, "PNG")
+    meta = parse_exif(p)
+    expected = datetime.fromtimestamp(p.stat().st_mtime).isoformat(timespec="seconds")
+    assert meta["captured_at"] == expected
+
+
+def test_tiny_embedded_jpeg_is_rejected(tmp_path: Path):
+    """The size floor was inert: both branches of the ternary returned `best`."""
+    from fieldcatalog.preview import MIN_EMBEDDED_JPEG, extract_embedded_jpeg
+
+    tiny = tmp_path / "tiny.nef"
+    buf = BytesIO()
+    Image.new("RGB", (16, 16), (9, 9, 9)).save(buf, "JPEG")
+    assert len(buf.getvalue()) < MIN_EMBEDDED_JPEG
+    tiny.write_bytes(b"\x00" * 64 + buf.getvalue())
+    assert extract_embedded_jpeg(tiny) is None
+
+    big = tmp_path / "big.nef"
+    buf2 = BytesIO()
+    # Noise, not flat colour -- a solid image compresses below the threshold.
+    noise = np.random.default_rng(0).integers(0, 256, (400, 400, 3), dtype=np.uint8)
+    Image.fromarray(noise, "RGB").save(buf2, "JPEG", quality=95)
+    assert len(buf2.getvalue()) > MIN_EMBEDDED_JPEG
+    big.write_bytes(b"\x00" * 64 + buf2.getvalue())
+    assert extract_embedded_jpeg(big) is not None
+
+
+def test_geocode_cache_is_per_library(tmp_path: Path):
+    """One library's pins must not leak into another's cache file."""
+    import fieldcatalog.geocode as geo
+
+    lib_a, lib_b = tmp_path / "a", tmp_path / "b"
+    lib_a.mkdir()
+    lib_b.mkdir()
+    geo._cache_for(lib_a)["ridge trail"] = (1.0, 2.0)
+    geo._cache_for(lib_b)["other place"] = (3.0, 4.0)
+    geo._save_disk_cache(lib_a)
+    geo._save_disk_cache(lib_b)
+
+    written_a = json.loads((lib_a / "geocode-cache.json").read_text())
+    written_b = json.loads((lib_b / "geocode-cache.json").read_text())
+    assert list(written_a) == ["ridge trail"]
+    assert list(written_b) == ["other place"]
+
+
+def test_save_cache_survives_a_read_only_library(tmp_path: Path, monkeypatch):
+    import fieldcatalog.geocode as geo
+
+    monkeypatch.setattr(
+        Path, "write_text", lambda *a, **k: (_ for _ in ()).throw(OSError("read-only"))
+    )
+    geo._save_disk_cache(tmp_path)  # must not raise
+
+
+def test_identify_reports_malformed_json_clearly():
+    from fieldcatalog.vision import IdentifyError, parse_identity
+
+    try:
+        parse_identity('{"commonName": "House Sparrow",}')
+        assert False, "should reject malformed JSON"
+    except IdentifyError as e:
+        assert "malformed JSON" in str(e)
+
+
+def test_set_location_by_date_writes_in_two_statements(tmp_path: Path):
+    """Shots with their own GPS take the label only; the rest also take the pin."""
+    from argparse import Namespace
+
+    import fieldcatalog.geocode as geo
+    from fieldcatalog.cli import cmd_set_location_by_date
+
+    lib = tmp_path / "library"
+    cat = Catalog(lib)
+    for i in range(5):
+        cat.upsert(
+            Shot(
+                id=f"s{i}",
+                original_path=f"{i}.jpg",
+                preview_path=f"{i}.jpg",
+                captured_at="2026-08-23T09:00:00",
+                gps_from_file=(i == 0),
+                lat=1.0 if i == 0 else None,
+                lon=2.0 if i == 0 else None,
+            )
+        )
+    orig = geo.geocode_label
+    geo.geocode_label = lambda _label, **_kw: (10.0, -20.0)
+    try:
+        assert cmd_set_location_by_date(
+            Namespace(library=str(lib), date="2026-08-23", location="ridge trail")
+        ) == 0
+    finally:
+        geo.geocode_label = orig
+
+    assert cat.get("s0").lat == 1.0  # file GPS untouched
+    assert cat.get("s0").location == "ridge trail"
+    for i in range(1, 5):
+        assert cat.get(f"s{i}").lat == 10.0
+        assert cat.get(f"s{i}").location == "ridge trail"
+
+
+def test_update_many_is_one_transaction(tmp_path: Path):
+    cat = Catalog(tmp_path / "library")
+    ids = []
+    for i in range(4):
+        cat.upsert(Shot(id=f"u{i}", original_path=f"{i}.jpg", preview_path=f"{i}.jpg"))
+        ids.append(f"u{i}")
+    assert cat.update_many(ids, location="ridge trail") == 4
+    assert all(cat.get(i).location == "ridge trail" for i in ids)
+    assert cat.update_many([], location="x") == 0
+    assert cat.update_many(ids) == 0

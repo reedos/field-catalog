@@ -7,11 +7,22 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-_CACHE: dict[str, tuple[float, float]] = {}
+# Keyed by library so two libraries in one process cannot pool their pins --
+# the on-disk cache is per library and writing a shared dict into it would
+# scatter one library's places through another's.
+_CACHE: dict[str, dict[str, tuple[float, float]]] = {}
 
 
 class GeocodeError(RuntimeError):
     pass
+
+
+def _cache_key(library: Path | None) -> str:
+    return "" if library is None else str(Path(library).expanduser().resolve())
+
+
+def _cache_for(library: Path | None) -> dict[str, tuple[float, float]]:
+    return _CACHE.setdefault(_cache_key(library), {})
 
 
 def _cache_path(library: Path | None) -> Path | None:
@@ -29,16 +40,21 @@ def _load_disk_cache(library: Path | None) -> None:
     except (OSError, json.JSONDecodeError):
         return
     if isinstance(data, dict):
+        cache = _cache_for(library)
         for k, v in data.items():
             if isinstance(v, (list, tuple)) and len(v) == 2:
-                _CACHE[str(k).lower()] = (float(v[0]), float(v[1]))
+                cache[str(k).lower()] = (float(v[0]), float(v[1]))
 
 
 def _save_disk_cache(library: Path | None) -> None:
     p = _cache_path(library)
     if not p:
         return
-    p.write_text(json.dumps(_CACHE, indent=2), encoding="utf-8")
+    try:
+        p.write_text(json.dumps(_cache_for(library), indent=2), encoding="utf-8")
+    except OSError:
+        # A read-only library must not throw away a lookup we already paid for.
+        pass
 
 
 def geocode_label(label: str, library: Path | None = None) -> tuple[float, float]:
@@ -46,11 +62,12 @@ def geocode_label(label: str, library: Path | None = None) -> tuple[float, float
     if not q:
         raise GeocodeError("empty place name")
     key = q.lower()
-    if key in _CACHE:
-        return _CACHE[key]
+    cache = _cache_for(library)
+    if key in cache:
+        return cache[key]
     _load_disk_cache(library)
-    if key in _CACHE:
-        return _CACHE[key]
+    if key in cache:
+        return cache[key]
     url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
         {"q": q, "format": "json", "limit": "1"}
     )
@@ -58,26 +75,22 @@ def geocode_label(label: str, library: Path | None = None) -> tuple[float, float
         url,
         headers={"User-Agent": "FieldCatalog/0.1 (local wildlife catalog)"},
     )
-    last_err = "geocode failed"
     for attempt in range(3):
         try:
             with urllib.request.urlopen(req, timeout=20) as resp:
                 payload = json.loads(resp.read().decode("utf-8"))
             break
         except urllib.error.HTTPError as e:
-            last_err = f"geocode HTTP {e.code}"
             if e.code == 429 and attempt < 2:
                 time.sleep(1.5 * (attempt + 1))
                 continue
-            raise GeocodeError(last_err) from e
+            raise GeocodeError(f"geocode HTTP {e.code}") from e
         except Exception as e:
             raise GeocodeError(str(e)) from e
-    else:
-        raise GeocodeError(last_err)
     if not payload:
         raise GeocodeError(f"no geocode match for {q!r}")
     pair = (float(payload[0]["lat"]), float(payload[0]["lon"]))
-    _CACHE[key] = pair
+    cache[key] = pair
     _save_disk_cache(library)
     return pair
 

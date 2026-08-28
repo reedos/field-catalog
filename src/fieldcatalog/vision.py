@@ -195,7 +195,10 @@ def parse_identity(text: str) -> dict:
     start, end = blob.find("{"), blob.rfind("}")
     if start < 0 or end <= start:
         raise IdentifyError("identify returned no JSON")
-    data = json.loads(blob[start : end + 1])
+    try:
+        data = json.loads(blob[start : end + 1])
+    except json.JSONDecodeError as e:
+        raise IdentifyError(f"identify returned malformed JSON: {e}") from e
     common = str(_pick(data, "commonName", "common_name") or "").strip()
     if not common:
         raise IdentifyError("identify returned no common name")

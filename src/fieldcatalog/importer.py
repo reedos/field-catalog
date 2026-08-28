@@ -38,11 +38,6 @@ def import_paths(catalog: Catalog, paths: list[Path], *, progress=None) -> dict:
         try:
             write_preview(path, preview)
             meta = parse_exif(path)
-            if meta.get("lat") is None or meta.get("lon") is None:
-                preview_meta = parse_exif(preview)
-                for key in ("lat", "lon", "captured_at", "camera", "lens", "iso", "shutter", "aperture", "focal_length", "location"):
-                    if meta.get(key) in (None, "") and preview_meta.get(key) not in (None, ""):
-                        meta[key] = preview_meta[key]
             sharpness = score_sharpness(preview)
         except Exception as e:
             if preview.exists():
