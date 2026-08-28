@@ -14,6 +14,7 @@ import Toolbar from "./components/Toolbar";
 import ShortcutsOverlay from "./components/ShortcutsOverlay";
 import CommandPalette from "./components/CommandPalette";
 import BulkLocationModal from "./components/BulkLocationModal";
+import { fmtBytes } from "./lib/format";
 import { isTypingTarget, loadKeys, matches, saveKeys } from "./lib/keys";
 import { isTauri, previewUrl } from "./lib/preview";
 import { api, onWorkerProgress } from "./lib/worker";
@@ -213,6 +214,29 @@ export default function App() {
           a.id.localeCompare(b.id),
       );
   }, [shots, compareBurstId]);
+
+  async function onExportKeepers() {
+    let dest: string | null = null;
+    if (isTauri()) {
+      const picked = await open({ directory: true, multiple: false, title: "Export keepers to folder" });
+      dest = typeof picked === "string" ? picked : null;
+    } else {
+      dest = window.prompt("Export keepers to folder:") || null;
+    }
+    if (!dest) return;
+    setBusy("Exporting keepers…");
+    setError("");
+    try {
+      const res = await api.exportOriginals(dest);
+      setBusy(
+        `Exported ${res.exported} original${res.exported === 1 ? "" : "s"} (${fmtBytes(res.bytes)}) · metadata.csv written`,
+      );
+      setTimeout(() => setBusy(""), 5000);
+    } catch (e) {
+      fail(e);
+      setBusy("");
+    }
+  }
 
   function cullOuting(d: string) {
     setDay(d);
@@ -617,6 +641,7 @@ const verdicts = useMemo(() => {
         onImport={() => void onImport()}
         onDelete={() => void diskFlow.openDelete()}
         onOffload={() => void diskFlow.openOffload()}
+        onExport={() => void onExportKeepers()}
         onIdentifySeries={() => void identify.runIdentifySeries(filtered, pickedIds)}
         onCancelIdentify={identify.cancel}
         identifyingSeries={identify.identifyingSeries}

@@ -121,6 +121,15 @@ export const api = {
 
   identifyCancel: () => runWorker<{ cancelled: boolean }>(["identify-cancel"]),
 
+  exportOriginals: (dest: string, verdict = "keep") =>
+    runWorker<{ dest: string; exported: number; bytes: number; csv: string; missing: number }>([
+      "export-originals",
+      "--dest",
+      dest,
+      "--verdict",
+      verdict,
+    ]),
+
   setKey: (value: string) => runWorker<{ has_xai_key: boolean }>(["set-key", "--value", value]),
 
   keyStatus: () =>

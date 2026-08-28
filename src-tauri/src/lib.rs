@@ -220,7 +220,9 @@ fn request_timeout(args: &[String]) -> Duration {
     match args.first().map(String::as_str) {
         // identify waits on a local model; import and refresh walk whole cards.
         Some("identify") => Duration::from_secs(330),
-        Some("import") | Some("refresh-previews") => Duration::from_secs(3600),
+        Some("import") | Some("refresh-previews") | Some("export-originals") => {
+            Duration::from_secs(3600)
+        }
         _ => Duration::from_secs(60),
     }
 }

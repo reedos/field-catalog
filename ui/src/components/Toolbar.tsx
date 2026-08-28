@@ -22,6 +22,7 @@ export default function Toolbar(props: {
   onImport: () => void;
   onDelete: () => void;
   onOffload: () => void;
+  onExport: () => void;
   onIdentifySeries: () => void;
   onCancelIdentify: () => void;
   identifyingSeries: boolean;
@@ -125,6 +126,16 @@ export default function Toolbar(props: {
           className="fc-btn fc-danger"
         >
           Delete rejected
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            props.onExport();
+          }}
+          className="fc-btn fc-warn"
+        >
+          Export keepers
         </button>
         <button
           type="button"

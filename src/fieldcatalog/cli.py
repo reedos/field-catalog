@@ -163,6 +163,24 @@ def cmd_import(ns: argparse.Namespace) -> int:
     return _out(True, **result)
 
 
+def cmd_export(ns: argparse.Namespace) -> int:
+    from .export import ExportError, export_originals
+
+    cat = _catalog(ns)
+    ids = [i.strip() for i in ns.ids.split(",") if i.strip()] if ns.ids else None
+    try:
+        result = export_originals(
+            cat,
+            Path(ns.dest),
+            ids=ids,
+            verdict=ns.verdict,
+            progress=_stderr_progress("export", every=10),
+        )
+    except ExportError as e:
+        return _out(False, error=str(e))
+    return _out(True, **result)
+
+
 def cmd_backup(ns: argparse.Namespace) -> int:
     from .maintenance import backup_catalog
 
@@ -599,6 +617,12 @@ def build_parser() -> argparse.ArgumentParser:
     ic = sub.add_parser("identify-cancel", help="abort the in-flight identify (serve mode)")
     ic.set_defaults(func=cmd_identify_cancel)
 
+    ex = sub.add_parser("export-originals", help="copy originals (keepers by default) to a folder with a metadata CSV")
+    ex.add_argument("--dest", required=True, help="destination folder")
+    ex.add_argument("--verdict", default="keep")
+    ex.add_argument("--ids", default="", help="comma-separated shot ids; overrides --verdict")
+    ex.set_defaults(func=cmd_export)
+
     bk = sub.add_parser("backup", help="copy the catalog into library/backups, keeping the newest few")
     bk.set_defaults(func=cmd_backup)
 
@@ -620,7 +644,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 # Commands that can run for minutes. They get their own lane so a verdict typed
 # mid-import answers immediately instead of queueing behind it.
-SLOW_COMMANDS = {"identify", "import", "refresh-previews", "backfill-dimensions", "doctor"}
+SLOW_COMMANDS = {"identify", "import", "refresh-previews", "backfill-dimensions", "doctor", "export-originals"}
 
 
 def serve_loop(library: str, stdin, stdout) -> None:

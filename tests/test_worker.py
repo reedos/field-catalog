@@ -997,3 +997,63 @@ def test_pending_cancel_catches_an_identify_that_just_started(tmp_path: Path):
     token = CancelToken()
     assert _identify_begin(token) is True
     _identify_end()
+
+
+# --- export ------------------------------------------------------------------
+
+
+def test_export_copies_keepers_with_metadata(tmp_path: Path):
+    import csv as csvmod
+
+    from fieldcatalog.export import export_originals
+
+    cat, ids, originals = _library_with_shots(tmp_path, 3, verdict="keep")
+    cat.update(ids[0], common_name="Steller's Jay", stars=4, location="Ridge Trail")
+    cat.update(ids[2], verdict="reject")  # must not export
+
+    dest = tmp_path / "handoff"
+    result = export_originals(cat, dest)
+    assert result["exported"] == 2
+    assert result["missing"] == 0
+    # Originals are copied, never moved.
+    assert all(p.is_file() for p in originals)
+    exported_names = {e["file"] for e in result["exported_files"]} if "exported_files" in result else None
+
+    with open(result["csv"], newline="", encoding="utf-8") as f:
+        rows = list(csvmod.DictReader(f))
+    assert len(rows) == 2
+    jay = next(r for r in rows if r["common_name"] == "Steller's Jay")
+    assert jay["stars"] == "4" and jay["location"] == "Ridge Trail"
+    assert (dest / jay["filename"]).is_file()
+
+
+def test_export_suffixes_name_collisions(tmp_path: Path):
+    from fieldcatalog.export import export_originals
+
+    # Two same-named files in different folders, both keepers.
+    a_dir, b_dir = tmp_path / "a", tmp_path / "b"
+    a_dir.mkdir()
+    b_dir.mkdir()
+    Image.new("RGB", (60, 40), (10, 80, 40)).save(a_dir / "DSC_0001.jpg", "JPEG")
+    Image.new("RGB", (60, 40), (99, 80, 40)).save(b_dir / "DSC_0001.jpg", "JPEG")
+    cat = Catalog(tmp_path / "library")
+    ids = import_paths(cat, [a_dir / "DSC_0001.jpg", b_dir / "DSC_0001.jpg"])["ids"]
+    for i in ids:
+        cat.update(i, verdict="keep")
+
+    dest = tmp_path / "out"
+    result = export_originals(cat, dest)
+    assert result["exported"] == 2
+    files = sorted(p.name for p in dest.glob("*.jpg"))
+    assert files == ["DSC_0001-2.jpg", "DSC_0001.jpg"]
+
+
+def test_export_refuses_the_preview_library(tmp_path: Path):
+    from fieldcatalog.export import ExportError, export_originals
+
+    cat, _ids, _originals = _library_with_shots(tmp_path, 1, verdict="keep")
+    try:
+        export_originals(cat, cat.previews)
+        assert False, "must refuse the preview folder"
+    except ExportError:
+        pass
