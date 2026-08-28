@@ -23,23 +23,63 @@ struct AppPaths {
     library: String,
 }
 
+const CLI_NAME: &str = if cfg!(windows) {
+    "fieldcatalog.exe"
+} else {
+    "fieldcatalog"
+};
+
+/// Locate the worker CLI.
+///
+/// Order matters: an installed app must never fall back to a path baked in at
+/// compile time, because `CARGO_MANIFEST_DIR` points at the build machine's
+/// source tree. Installed locations are checked first, the dev venv last.
 fn find_cli() -> Result<PathBuf, String> {
+    let mut tried: Vec<PathBuf> = Vec::new();
+
+    // 1. Explicit override — used by tests and for pointing at a custom build.
     if let Ok(p) = std::env::var("FIELDCATALOG_CLI") {
         let pb = PathBuf::from(p);
         if pb.is_file() {
             return Ok(pb);
         }
+        tried.push(pb);
     }
+
+    // 2. Installed layout. Tauri drops sidecars beside the app executable and
+    //    resources either beside it or under `resources/`.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            for candidate in [dir.join(CLI_NAME), dir.join("resources").join(CLI_NAME)] {
+                if candidate.is_file() {
+                    return Ok(candidate);
+                }
+                tried.push(candidate);
+            }
+        }
+    }
+
+    // 3. Dev fallback: the venv in the source tree. Only ever hits on the
+    //    machine the binary was compiled on.
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    let win = repo.join(".venv").join("Scripts").join("fieldcatalog.exe");
-    if win.is_file() {
-        return Ok(win);
+    for candidate in [
+        repo.join(".venv").join("Scripts").join("fieldcatalog.exe"),
+        repo.join(".venv").join("bin").join("fieldcatalog"),
+    ] {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+        tried.push(candidate);
     }
-    let unix = repo.join(".venv").join("bin").join("fieldcatalog");
-    if unix.is_file() {
-        return Ok(unix);
-    }
-    Err("fieldcatalog CLI not found (.venv/Scripts/fieldcatalog.exe)".into())
+
+    Err(format!(
+        "fieldcatalog CLI not found. Tried:\n{}",
+        tried
+            .iter()
+            .map(|p| format!("  {}", p.display()))
+            .collect::<Vec<_>>()
+            .join("\n")
+    ))
 }
 
 fn library_path() -> PathBuf {

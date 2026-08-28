@@ -9,8 +9,16 @@
 - [ ] Accessibility pass: no `role="dialog"` or focus trap on any modal;
       `text-paper-dim` on `bg-paper` is unreadable in the shortcuts overlay and
       command palette; grid has no ARIA structure and no Enter-to-open
-- [ ] Ship off this machine: `find_cli()` bakes in `CARGO_MANIFEST_DIR` at compile
-      time, so the NSIS bundle only runs here. Needs a sidecar or `resources` entry.
+- [ ] Ship off this machine. Two halves:
+      - [x] Runtime lookup: `find_cli()` now checks beside the app executable and
+            `resources/` before falling back to the dev venv, so an installed app
+            no longer depends on `CARGO_MANIFEST_DIR`.
+      - [ ] Ship an actual CLI. `.venv/Scripts/fieldcatalog.exe` is a 108 KB
+            setuptools launcher that resolves Python relative to itself — it needs
+            the whole venv beside it and cannot be bundled alone. Freeze the worker
+            with PyInstaller into a standalone exe, then declare it as a Tauri
+            sidecar (`externalBin`, named `fieldcatalog-x86_64-pc-windows-msvc.exe`).
+            Adds a build step and roughly 40-80 MB to the installer.
 
 ## Medium
 - [ ] Meter component: ensure gradient renders on all browsers
