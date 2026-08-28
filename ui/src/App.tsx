@@ -40,6 +40,7 @@ export default function App() {
   const [search, setSearch] = useState("");
   // The input stays responsive; the 3500-row filter + sort yields to it.
   const deferredSearch = useDeferredValue(search);
+  const [catalogFieldMarks, setCatalogFieldMarks] = useState<string[]>([]);
   const [animal, setAnimal] = useState<AnimalType | "">("");
   const [location, setLocation] = useState("");
   const [starsMin, setStarsMin] = useState(0);
@@ -109,6 +110,10 @@ export default function App() {
   const reload = useCallback(async () => {
     const listed = await api.list();
     setShots((listed.shots || []).map(normalizeShot));
+    // Suggestion vocabulary is a nice-to-have; never fail a reload over it.
+    api.fieldMarks()
+      .then((res) => setCatalogFieldMarks(res.marks || []))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -118,7 +123,7 @@ export default function App() {
     });
     (async () => {
       try {
-        setBusy("Opening libraryâ€¦");
+        setBusy("Opening library…");
         setPaths(await api.paths());
         await api.init();
         const key = await api.keyStatus();
@@ -155,15 +160,17 @@ export default function App() {
     return [...set].sort();
   }, [shots]);
 
+  // Marks from the loaded shots, merged with the catalog-wide vocabulary so
+  // suggestions still work when the grid is filtered down to a few frames.
   const fieldMarkOptions = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(catalogFieldMarks);
     for (const s of shots) {
       for (const m of s.field_marks || []) {
         if (m) set.add(m);
       }
     }
     return [...set].sort();
-  }, [shots]);
+  }, [shots, catalogFieldMarks]);
 
   const filtered = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
@@ -398,7 +405,7 @@ export default function App() {
     } finally {
       setIdentifying(false);
       setIdentifyingSeries(false);
-      setBusy(failed ? `Identify stopped Â· ${failed} failed` : "");
+      setBusy(failed ? `Identify stopped · ${failed} failed` : "");
     }
   }
 
@@ -458,14 +465,31 @@ export default function App() {
     await keepOneOfBurst(meta.keepId, meta.memberIds);
   }
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (disk) {
-        if (e.key === "Escape") setDisk(null);
+  function onKey(e: KeyboardEvent) {
+    {
+      // Anything modal swallows the cull keys. Without this, x and p write
+      // verdicts to the shot sitting behind the open dialog.
+      const closeTopModal =
+        (disk && (() => setDisk(null))) ||
+        (showBulkLocation && (() => setShowBulkLocation(false))) ||
+        (auditOpen && (() => setAuditOpen(false))) ||
+        (showPalette && (() => setShowPalette(false))) ||
+        (showShortcuts && (() => setShowShortcuts(false))) ||
+        null;
+      // Typing is checked first so inputs inside a modal still work.
+      if (isTypingTarget(e.target)) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          if (closeTopModal) closeTopModal();
+          else (e.target as HTMLElement).blur();
+        }
         return;
       }
-      if (isTypingTarget(e.target)) {
-        if (e.key === "Escape") (e.target as HTMLElement).blur();
+      if (closeTopModal) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeTopModal();
+        }
         return;
       }
       if (matches(e, keys.search)) {
@@ -500,7 +524,11 @@ export default function App() {
           return;
         }
         if (detail) {
-          goBack();
+          // Close the panel itself. goBack only restores view and filters,
+          // which left the panel stuck open with no keyboard way out.
+          e.preventDefault();
+          setDetail(false);
+          setLoupe(false);
           return;
         }
         return;
@@ -508,10 +536,11 @@ export default function App() {
       if (!selectedId && navList[0]) setSelectedId(navList[0].id);
       const id = selectedId || navList[0]?.id;
       if (!id) return;
-      if (matches(e, keys.next) || e.key === "ArrowRight" || e.key === "ArrowDown") {
+      const bare = !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (matches(e, keys.next) || (bare && (e.key === "ArrowRight" || e.key === "ArrowDown"))) {
         e.preventDefault();
         move(1);
-      } else if (matches(e, keys.prev) || e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      } else if (matches(e, keys.prev) || (bare && (e.key === "ArrowLeft" || e.key === "ArrowUp"))) {
         e.preventDefault();
         move(-1);
       } else if (matches(e, keys.keep)) {
@@ -535,21 +564,30 @@ export default function App() {
         setLoupe((v) => !v);
       }
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+  }
+
+  // The handler closes over most of the app's state, so it is kept in a ref and
+  // the listener is registered once. A dependency array here would either
+  // re-register on every render or go stale.
+  const onKeyRef = useRef(onKey);
+  onKeyRef.current = onKey;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => onKeyRef.current(e);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   async function onImport() {
     let source: string | null = null;
     if (isTauri()) {
-      const dir = await open({ directory: true, multiple: false, title: "Import folder â€” originals stay put" });
+      const dir = await open({ directory: true, multiple: false, title: "Import folder — originals stay put" });
       if (!dir) return;
       source = Array.isArray(dir) ? dir[0] : dir;
     } else {
       source = window.prompt("Folder to import (originals stay there)");
     }
     if (!source) return;
-    setBusy("Importingâ€¦");
+    setBusy("Importing…");
     setError("");
     try {
       await api.importSource(source);
@@ -562,7 +600,7 @@ export default function App() {
   }
 
   async function openDelete() {
-    setBusy("Listing rejected originalsâ€¦");
+    setBusy("Listing rejected originals…");
     setError("");
     setDetail(false);
     try {
@@ -594,7 +632,7 @@ export default function App() {
       setError("No keepers with originals still on disk.");
       return;
     }
-    setBusy("Dry-run offloadâ€¦");
+    setBusy("Dry-run offload…");
     setError("");
     try {
       const ids = keepers.map((s) => s.id);
@@ -631,7 +669,7 @@ export default function App() {
       ok = window.confirm(message);
     }
     if (!ok) return;
-    setBusy("Unlinking originalsâ€¦");
+    setBusy("Unlinking originals…");
     try {
       const result =
         disk.kind === "delete"
@@ -641,7 +679,7 @@ export default function App() {
       await reload();
       if (!result.errors?.length) {
         setDisk(null);
-        setBusy(`Unlinked ${result.count ?? ids.length} original${(result.count ?? ids.length) === 1 ? "" : "s"} Â· previews kept`);
+        setBusy(`Unlinked ${result.count ?? ids.length} original${(result.count ?? ids.length) === 1 ? "" : "s"} · previews kept`);
         setTimeout(() => setBusy(""), 4000);
       }
     } catch (e) {
@@ -662,7 +700,7 @@ export default function App() {
     } catch {}
   }
   async function loadBursts() {
-    setBusy("Finding burstsâ€¦");
+    setBusy("Finding bursts…");
     try {
       const res = await api.bursts();
       setBursts(res.bursts || []);
@@ -845,7 +883,7 @@ const verdicts = useMemo(() => {
               onCompare={(id) => enterBurst(id)}
             />
           ) : (
-            <div className="p-8 text-paper-dim font-serif">Loading libraryâ€¦</div>
+            <div className="p-8 text-paper-dim font-serif">Loading library…</div>
           )
         ) : null}
         {view === "map" ? (
@@ -922,7 +960,7 @@ const verdicts = useMemo(() => {
             onViewAudit={loadAudit}
             onRefresh={() => {
               void (async () => {
-                setBusy("Refreshing previewsâ€¦");
+                setBusy("Refreshing previews…");
                 try {
                   await api.refreshPreviews();
                   await reload();
@@ -1002,10 +1040,10 @@ const verdicts = useMemo(() => {
         <span>{verdicts.unrated} unrated</span>
         <span className="ml-auto">
           {burstReviewId
-            ? `Burst ${selectedIndex + 1}/${burstMembers.length} Â· Esc library`
+            ? `Burst ${selectedIndex + 1}/${burstMembers.length} · Esc library`
             : pickedIds.size
-              ? `${pickedIds.size} picked Â· Identify series`
-              : "Ctrl+click pick Â· Identify series Â· J/K cull"}
+              ? `${pickedIds.size} picked · Identify series`
+              : "Ctrl+click pick · Identify series · J/K cull"}
         </span>
       </footer>
       {showBulkLocation && (

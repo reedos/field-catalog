@@ -22,6 +22,9 @@ export function eventKey(e: KeyboardEvent): string {
 }
 
 export function matches(e: KeyboardEvent, wanted: string): boolean {
+  // Cull keys are bare keys. Without this, Ctrl+X rejects the selected shot
+  // and Ctrl+F toggles favorite instead of doing what the user meant.
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
   if (wanted === "Escape") return e.key === "Escape";
   if (wanted === "/") return e.key === "/";
   return e.key.toLowerCase() === wanted.toLowerCase();
