@@ -6,6 +6,7 @@ const VIEW_HINTS: Record<View, { action: string; hint: string }[]> = {
     { action: "Navigate", hint: "j/k or ↑/↓" },
     { action: "Open detail", hint: "Enter or click" },
     { action: "Toggle loupe", hint: "l" },
+    { action: "Compare burst", hint: "COMPARE on a burst cell" },
   ],
   map: [
     { action: "Focus search", hint: "/" },
@@ -14,6 +15,7 @@ const VIEW_HINTS: Record<View, { action: string; hint: string }[]> = {
   bursts: [
     { action: "Open burst", hint: "Enter" },
     { action: "Apply keep", hint: "p" },
+    { action: "Compare frames", hint: "Compare button" },
   ],
   life: [
     { action: "Search species", hint: "/" },
@@ -53,6 +55,15 @@ export default function ShortcutsOverlay({ keys, view, onClose }: { keys: Keymap
               <div className="font-mono">{String(k)}</div>
             </Fragment>
           ))}
+        </div>
+        <div className="mt-6 pt-4 border-t border-bark">
+          <div className="text-sm font-medium text-bark mb-2">Compare view</div>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="text-bark/80">Focus frame</div><div>arrows or j/k</div>
+            <div className="text-bark/80">Reject / keep / restore</div><div>x · p · u</div>
+            <div className="text-bark/80">Keep focused, reject rest</div><div>Enter</div>
+            <div className="text-bark/80">1:1 zoom, drag pans all</div><div>l or double-click</div>
+          </div>
         </div>
         {VIEW_HINTS[view] && (
           <div className="mt-6 pt-4 border-t border-bark">

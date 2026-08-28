@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import Bursts from "./components/Bursts";
+import CompareView from "./components/CompareView";
 import AuditLog from "./components/AuditLog";
 import Detail from "./components/Detail";
 import DiskDialog from "./components/DiskDialog";
@@ -72,6 +73,7 @@ export default function App() {
   const [audit, setAudit] = useState<{ts:string;action:string;count:number;bytes:number}[]>([]);
   const [auditOpen, setAuditOpen] = useState(false);
   const [burstReviewId, setBurstReviewId] = useState<string | null>(null);
+  const [compareBurstId, setCompareBurstId] = useState<string | null>(null);
   const [pickedIds, setPickedIds] = useState<Set<string>>(() => new Set());
   const searchRef = useRef<HTMLInputElement>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -181,6 +183,26 @@ export default function App() {
           a.id.localeCompare(b.id),
       );
   }, [shots, burstReviewId]);
+  const compareMembers = useMemo(() => {
+    if (!compareBurstId) return [];
+    return shots
+      .filter((s) => s.burst_id === compareBurstId)
+      .sort(
+        (a, b) =>
+          (a.captured_at || "").localeCompare(b.captured_at || "") ||
+          (a.display_name || "").localeCompare(b.display_name || "", undefined, { numeric: true }) ||
+          a.id.localeCompare(b.id),
+      );
+  }, [shots, compareBurstId]);
+
+  function openCompare(burstId: string | null | undefined) {
+    if (!burstId) return;
+    if (shots.filter((s) => s.burst_id === burstId).length < 2) return;
+    setDetail(false);
+    setLoupe(false);
+    setCompareBurstId(burstId);
+  }
+
   const navList = burstReviewId ? burstMembers : filtered;
   const selectedIndex = navList.findIndex((s) => s.id === selectedId);
   const burstMeta = useMemo(() => {
@@ -348,6 +370,7 @@ export default function App() {
   }
 
   function onKey(e: KeyboardEvent) {
+    if (compareBurstId) return; // CompareView runs its own keyboard while open
     {
       // Anything modal swallows the cull keys. Without this, x and p write
       // verdicts to the shot sitting behind the open dialog.
@@ -604,7 +627,7 @@ const verdicts = useMemo(() => {
               }}
               onKeepThis={(id) => void keepThis(id)}
               onKeepPick={(bid) => void keepPick(bid)}
-              onCompare={(id) => enterBurst(id)}
+              onCompare={(id) => openCompare(shotsById.get(id)?.burst_id)}
             />
           ) : (
             <div className="p-8 text-paper-dim font-serif">Loading library…</div>
@@ -634,6 +657,7 @@ const verdicts = useMemo(() => {
           <Bursts
             bursts={bursts}
             shotsById={shotsById}
+            onCompare={(burstId) => openCompare(burstId)}
             onOpen={(id) => enterBurst(id)}
             onApply={(keepId, rejectIds) => {
               void (async () => {
@@ -767,6 +791,19 @@ const verdicts = useMemo(() => {
           }}
         />
       )}
+      {compareBurstId ? (
+        <CompareView
+          members={compareMembers}
+          keys={keys}
+          onVerdict={(id, v) => void setVerdictOnly(id, v)}
+          onKeepOnly={(keepId) => {
+            void keepOneOfBurst(keepId, compareMembers.map((m) => m.id));
+            setCompareBurstId(null);
+            setSelectedId(keepId);
+          }}
+          onClose={() => setCompareBurstId(null)}
+        />
+      ) : null}
       {auditOpen ? <AuditLog entries={audit} onClose={() => setAuditOpen(false)} /> : null}
       {disk ? (
         <DiskDialog

@@ -2,7 +2,6 @@
 
 ## High value, pending
 - [ ] Pending-deletes quick view: show count in Toolbar badge, open dry-run dialog directly
-- [ ] Burst pick UI polish: compare view, bulk apply verdicts
 - [ ] Grid performance: virtualizer preload tuning (dimensions are stored now, so the
       layout no longer reflows; this is only about prefetching the next rows)
 - [ ] "Pending" toolbar button is a duplicate of "Delete rejected" — give it its own
@@ -40,6 +39,9 @@
 - [ ] `xai.key` is written plaintext with default permissions
 
 ## Done
+- [x] Compare view: survey all frames of a burst at once with synced pan/1:1 zoom,
+      X culls the pool live, U restores, Enter keeps the focused frame and rejects
+      the rest. Entered from a burst cell's COMPARE or the Bursts view.
 - [x] Back button / history navigation
 - [x] Library thumbnails orientation + size
 - [x] Detail view as scrollable side panel

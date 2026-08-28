@@ -7,6 +7,7 @@ export default function Bursts(props: {
   shotsById: Map<string, Shot>;
   onApply: (keepId: string, rejectIds: string[]) => void;
   onOpen: (id: string) => void;
+  onCompare: (burstId: string) => void;
 }) {
   if (!props.bursts.length) {
     return (
@@ -24,6 +25,7 @@ export default function Bursts(props: {
           shotsById={props.shotsById}
           onApply={props.onApply}
           onOpen={props.onOpen}
+          onCompare={props.onCompare}
         />
       ))}
     </div>
@@ -35,6 +37,7 @@ function BurstRow(props: {
   shotsById: Map<string, Shot>;
   onApply: (keepId: string, rejectIds: string[]) => void;
   onOpen: (id: string) => void;
+  onCompare: (burstId: string) => void;
 }) {
   const members = useMemo(() => {
     const ids = props.burst.member_ids?.length
@@ -52,17 +55,25 @@ function BurstRow(props: {
           {members.length} frames
           {keep?.sharpness != null ? ` · sharpest ${keep.sharpness.toFixed(0)}` : ""}
         </h3>
-        <button
-          className="text-sm px-2 py-1 bg-moss text-paper"
-          onClick={() =>
-            props.onApply(
-              keepId,
-              members.filter((m) => m.id !== keepId).map((m) => m.id),
-            )
-          }
-        >
-          Keep pick, reject rest
-        </button>
+        <div className="flex gap-2">
+          <button
+            className="fc-btn fc-warn"
+            onClick={() => props.onCompare(props.burst.burst_id)}
+          >
+            Compare
+          </button>
+          <button
+            className="fc-btn border-moss bg-moss text-paper hover:bg-moss-dark hover:border-moss-dark"
+            onClick={() =>
+              props.onApply(
+                keepId,
+                members.filter((m) => m.id !== keepId).map((m) => m.id),
+              )
+            }
+          >
+            Keep pick, reject rest
+          </button>
+        </div>
       </div>
       <div className="flex gap-2 overflow-x-auto">
         {members.map((shot) => {
