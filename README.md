@@ -96,23 +96,32 @@ juveniles, anything where the field marks are subtle. Everything a model writes
 is editable, and low-confidence results are worth treating as a prompt to look
 it up rather than an answer.
 
-## Requirements
-
-- Windows (the desktop shell is built and tested there; the worker is portable)
-- Python 3.10+
-- Node 20+ and Rust, for building the desktop shell
-- Optional: [`exiftool`](https://exiftool.org/) on `PATH` for better RAW GPS and
-  metadata; `rawpy` for better RAW thumbnails
-- Optional, for species identification only: [Ollama](https://ollama.com) with a
-  vision model, or an xAI API key — see [Identification](#identification)
-
 ## Install
+
+Download the latest **`Field-Catalog-x.y.z-x64-setup.exe`** from
+[Releases](https://github.com/reedos/field-catalog-worker/releases) and run it.
+The Python worker is bundled, so nothing else needs installing.
+
+Windows will warn that the installer is unsigned — **More info → Run anyway**.
+It installs per-user, so there is no admin prompt, and it lands in
+`%LOCALAPPDATA%/Field Catalog` with a Start menu entry. A newer installer
+upgrades in place and leaves your library alone — close the app first, because
+Windows cannot replace a running executable.
+
+**Requirements:** Windows. Optionally [`exiftool`](https://exiftool.org/) on
+`PATH` for better RAW GPS and metadata, and — only for automatic species
+identification — [Ollama](https://ollama.com) with a vision model or an xAI API
+key. See [Identification](#identification); it is optional.
+
+## Build from source
+
+Needs Python 3.10+, Node 20+ and Rust.
 
 ```bash
 git clone https://github.com/reedos/field-catalog-worker.git
 cd field-catalog-worker
 python -m venv .venv
-.venv\Scripts\activate          # Unix: source .venv/bin/activate
+.venv/Scripts/activate          # Unix: source .venv/bin/activate
 pip install -e ".[dev]"         # ".[raw]" adds rawpy for NEF thumbnails
 npm install && npm --prefix ui install
 ```
@@ -124,15 +133,25 @@ npm run tauri -- dev            # desktop window
 npm run dev                     # browser-only UI loop (scripts/dev-browser.bat)
 ```
 
-The library lives at `%USERPROFILE%\FieldCatalog` (`$FIELDCATALOG_LIBRARY` to
-override): `catalog.sqlite`, `previews/`, `backups/`, `audit.jsonl`.
+Your library lives at `%USERPROFILE%/FieldCatalog` (`$FIELDCATALOG_LIBRARY` to
+put it elsewhere): `catalog.sqlite`, `previews/`, `backups/`, `audit.jsonl`.
+Nothing is written anywhere else.
 
 ### Building an installer
 
-```powershell
-powershell -File scripts\build-worker.ps1   # standalone worker exe
-npm run tauri build                          # bundles it into an NSIS installer
+```bash
+npm run build:installer
 ```
+
+That builds the standalone worker with PyInstaller and bundles it into an NSIS
+installer under `src-tauri/target/release/bundle/nsis/`. The worker exe is a
+build artifact, so the bundling settings live in
+`src-tauri/tauri.bundle.conf.json` and are merged only for that command — a
+fresh clone can run `tauri dev` without building the worker first.
+
+To cut a full release — version bump across all four files, tests, build, tag,
+and a GitHub release with the installer attached — use
+`scripts/release.ps1 -Version x.y.z`.
 
 ## The worker
 
