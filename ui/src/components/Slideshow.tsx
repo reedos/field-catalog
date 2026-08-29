@@ -1,10 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Shot } from "../types";
 import { fmtDate } from "../lib/format";
 import { previewUrl } from "../lib/preview";
 
 const INTERVALS = [3, 5, 8, 12] as const;
 const CAPTION_KEY = "fieldcatalog.slideshow.caption";
+const SCOPE_KEY = "fieldcatalog.slideshow.scope";
+
+const SCOPES = {
+  keep: { label: "Keepers", verdicts: ["keep"] },
+  "keep+unrated": { label: "Keepers + unrated", verdicts: ["keep", "unrated"] },
+  unrated: { label: "Unrated", verdicts: ["unrated"] },
+  reject: { label: "Rejected", verdicts: ["reject"] },
+  all: { label: "Everything", verdicts: ["keep", "unrated", "reject"] },
+} as const;
+
+type Scope = keyof typeof SCOPES;
 
 /**
  * Full-screen review of the keepers in the current view.
@@ -18,15 +29,46 @@ const CAPTION_KEY = "fieldcatalog.slideshow.caption";
  * gesture that belongs in "look at your good photographs".
  */
 export default function Slideshow(props: {
+  /** Everything in the current view; the scope selector narrows it here. */
   shots: Shot[];
   startId?: string | null;
   onFavorite: (id: string) => void;
   onClose: () => void;
 }) {
-  const [index, setIndex] = useState(() => {
-    const i = props.startId ? props.shots.findIndex((s) => s.id === props.startId) : 0;
-    return i >= 0 ? i : 0;
+  const [scope, setScope] = useState<Scope>(() => {
+    try {
+      const saved = localStorage.getItem(SCOPE_KEY);
+      return saved && saved in SCOPES ? (saved as Scope) : "keep";
+    } catch {
+      return "keep";
+    }
   });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SCOPE_KEY, scope);
+    } catch {
+      // a remembered preference is a nicety, never a failure
+    }
+  }, [scope]);
+
+  // Oldest first, so a run reads as the story of the outing.
+  const shots = useMemo(() => {
+    const allowed = SCOPES[scope].verdicts as readonly string[];
+    return props.shots
+      .filter((s) => allowed.includes(s.verdict))
+      .slice()
+      .sort((a, b) => (a.captured_at || "").localeCompare(b.captured_at || ""));
+  }, [props.shots, scope]);
+
+  // Position is held as an id, not an index, so changing scope keeps you on
+  // the same photograph whenever it survives the new filter.
+  const [currentId, setCurrentId] = useState<string | null>(props.startId ?? null);
+  const found = currentId ? shots.findIndex((s) => s.id === currentId) : -1;
+  const lastIndex = useRef(0);
+  const index = found >= 0 ? found : Math.min(lastIndex.current, Math.max(0, shots.length - 1));
+  lastIndex.current = index;
+
   const [playing, setPlaying] = useState(true);
   const [seconds, setSeconds] = useState<number>(5);
   const [captionVisible, setCaptionVisible] = useState(() => {
@@ -47,12 +89,18 @@ export default function Slideshow(props: {
     }
   }, [captionVisible]);
 
-  const shot = props.shots[index] ?? null;
-  const total = props.shots.length;
+  const shot = shots[index] ?? null;
+  const total = shots.length;
+
+  useEffect(() => {
+    // Keep the anchor in step when advancing or when the list shifts underneath.
+    if (shot && shot.id !== currentId) setCurrentId(shot.id);
+  }, [shot, currentId]);
 
   function step(delta: number) {
     if (!total) return;
-    setIndex((i) => (i + delta + total) % total); // wraps, so it can loop
+    const next = shots[(index + delta + total) % total]; // wraps, so it can loop
+    if (next) setCurrentId(next.id);
   }
 
   // Auto-advance. Restarting on index change is what makes a manual step also
@@ -88,14 +136,14 @@ export default function Slideshow(props: {
   // Decode ahead so an advance never lands on a blank frame.
   useEffect(() => {
     for (const offset of [1, 2]) {
-      const next = props.shots[(index + offset) % Math.max(1, total)];
+      const next = shots[(index + offset) % Math.max(1, total)];
       const src = next && previewUrl(next.preview_path);
       if (!src) continue;
       const img = new window.Image();
       img.decoding = "async";
       img.src = src;
     }
-  }, [index, total, props.shots]);
+  }, [index, total, shots]);
 
   const onKey = (e: KeyboardEvent) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -147,10 +195,24 @@ export default function Slideshow(props: {
   if (!shot) {
     return (
       <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center gap-4 bg-ink font-serif text-paper-dim">
-        <div>No keepers in the current view to show.</div>
-        <button type="button" className="fc-btn fc-ghost" onClick={props.onClose}>
-          Close
-        </button>
+        <div>Nothing {SCOPES[scope].label.toLowerCase()} in the current view.</div>
+        <div className="flex items-center gap-2">
+          <select
+            value={scope}
+            onChange={(e) => setScope(e.target.value as Scope)}
+            className="fc-select"
+            aria-label="Which shots to show"
+          >
+            {(Object.keys(SCOPES) as Scope[]).map((k) => (
+              <option key={k} value={k}>
+                {SCOPES[k].label}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="fc-btn fc-ghost" onClick={props.onClose}>
+            Close
+          </button>
+        </div>
       </div>
     );
   }
@@ -185,7 +247,16 @@ export default function Slideshow(props: {
             {shot.scientific_name && shot.location ? " · " : ""}
             <span className="not-italic">{shot.location || ""}</span>
           </div>
-          <div className="mt-0.5 text-[11px] text-paper-dim">
+          <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-paper-dim">
+            {shot.verdict !== "keep" ? (
+              <span
+                className={`rounded-sm px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
+                  shot.verdict === "reject" ? "bg-reject text-paper" : "border border-bark text-paper-dim"
+                }`}
+              >
+                {shot.verdict}
+              </span>
+            ) : null}
             {fmtDate(shot.captured_at)}
             {shot.animal_type ? ` · ${shot.animal_type}` : ""}
             {shot.stars ? ` · ${"★".repeat(shot.stars)}` : ""}
@@ -226,6 +297,18 @@ export default function Slideshow(props: {
           {shot.favorite ? "★ Favorite" : "☆ Favorite"}
         </button>
         <select
+          value={scope}
+          onChange={(e) => setScope(e.target.value as Scope)}
+          className="fc-select"
+          aria-label="Which shots to show"
+        >
+          {(Object.keys(SCOPES) as Scope[]).map((k) => (
+            <option key={k} value={k}>
+              {SCOPES[k].label}
+            </option>
+          ))}
+        </select>
+        <select
           value={seconds}
           onChange={(e) => setSeconds(Number(e.target.value))}
           className="fc-select"
@@ -238,7 +321,8 @@ export default function Slideshow(props: {
           ))}
         </select>
         <span className="ml-auto text-xs text-paper-dim">
-          Space play/pause · ←/→ step · F favorite · I {captionVisible ? "hide" : "show"} caption · Esc close
+          {SCOPES[scope].label} · Space play/pause · ←/→ step · F favorite · I{" "}
+          {captionVisible ? "hide" : "show"} caption · Esc close
         </span>
       </div>
 

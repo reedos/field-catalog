@@ -249,15 +249,6 @@ export default function App() {
     nav.record({ day: d, verdict: "unrated", view: "library" });
   }
 
-  const slideshowShots = useMemo(
-    () =>
-      filtered
-        .filter((s) => s.verdict === "keep")
-        .slice()
-        .sort((a, b) => (a.captured_at || "").localeCompare(b.captured_at || "")),
-    [filtered],
-  );
-
   function openCompare(burstId: string | null | undefined) {
     if (!burstId) return;
     if (shots.filter((s) => s.burst_id === burstId).length < 2) return;
@@ -914,8 +905,8 @@ const verdicts = useMemo(() => {
       )}
       {slideshow ? (
         <Slideshow
-          shots={slideshowShots}
-          startId={selected?.verdict === "keep" ? selected.id : null}
+          shots={filtered}
+          startId={selected?.id ?? null}
           onFavorite={(id) => void toggleFavorite(id)}
           onClose={() => setSlideshow(false)}
         />
