@@ -173,9 +173,47 @@ def test_parse_identity_factual():
 
 
 def test_identify_defaults_to_local_ollama(tmp_path: Path):
+    """A fresh library defaults to a model a stranger can actually pull."""
+    from fieldcatalog.vision import DEFAULT_OLLAMA_MODEL
+
     cfg = load_config(tmp_path)
     assert cfg["backend"] == "ollama"
-    assert cfg["ollama_model"] == "muse-glimmer:30b"
+    assert cfg["ollama_model"] == DEFAULT_OLLAMA_MODEL == "llama3.2-vision"
+
+
+def test_saved_config_beats_the_shipped_default(tmp_path: Path):
+    """An existing library keeps whatever model it was set up with."""
+    from fieldcatalog.vision import save_config
+
+    save_config(tmp_path, ollama_model="some-other-model:30b")
+    assert load_config(tmp_path)["ollama_model"] == "some-other-model:30b"
+
+
+def test_missing_model_and_dead_ollama_explain_themselves(tmp_path: Path, monkeypatch):
+    """The two ways identify fails are both fixable; say which one it is."""
+    import fieldcatalog.vision as vision
+
+    monkeypatch.setattr(
+        vision, "_post_json",
+        lambda *a, **k: (_ for _ in ()).throw(vision.IdentifyError("HTTP 404: model 'x' not found")),
+    )
+    try:
+        vision.identify_ollama("aGk=", {"ollama_model": "x"})
+        assert False, "should raise"
+    except vision.IdentifyError as e:
+        assert "ollama pull x" in str(e)
+        assert "optional" in str(e)
+
+    monkeypatch.setattr(
+        vision, "_post_json",
+        lambda *a, **k: (_ for _ in ()).throw(ConnectionRefusedError("refused")),
+    )
+    try:
+        vision.identify_ollama("aGk=", {"ollama_url": "http://127.0.0.1:11434"})
+        assert False, "should raise"
+    except vision.IdentifyError as e:
+        assert "Could not reach Ollama" in str(e)
+        assert "optional" in str(e)
 
 
 # --- delete / offload safety -------------------------------------------------

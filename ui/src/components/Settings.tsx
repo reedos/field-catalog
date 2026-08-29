@@ -69,7 +69,7 @@ export default function Settings(props: {
       </div>
       <h3 className="text-sm uppercase tracking-wide text-ochre mb-2">Identify</h3>
       <p className="text-xs text-paper-dim mb-2">
-        User-clicked only. Local uses Ollama on this PC (muse-glimmer). xAI is optional cloud.
+        User-clicked only, never on import. Local runs an Ollama vision model on this PC; xAI sends the preview to their API. Identification is optional — you can type species names in the detail panel instead.
       </p>
       <div className="flex gap-2 mb-3">
         <button

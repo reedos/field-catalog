@@ -25,7 +25,8 @@ export function useIdentify(deps: {
   const [hasXaiKey, setHasXaiKey] = useState(false);
   const [xaiKeyDraft, setXaiKeyDraft] = useState("");
   const [backend, setBackend] = useState<"ollama" | "xai">("ollama");
-  const [ollamaModel, setOllamaModel] = useState("muse-glimmer:30b");
+  // Placeholder until the worker reports the library's actual setting.
+  const [ollamaModel, setOllamaModel] = useState("llama3.2-vision");
 
   /** Pull the saved backend/key status into state; called once at startup. */
   async function loadKeyStatus() {

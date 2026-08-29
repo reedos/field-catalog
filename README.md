@@ -31,8 +31,8 @@ separate, deliberate act behind a dry run and an exact confirmation string.
   across them, culling the pool live until one remains.
 - **Outings** — the library groups by capture day, so a session is a trip
   rather than a wall of thumbnails.
-- **Identify** species with a local Ollama vision model or the xAI API, one
-  shot or a whole series, cancellable mid-call.
+- **Identify** species with a local vision model or an API key — optional, see
+  [Identification](#identification); typing names by hand works fine too.
 - **Life list** — one plate per species, your best frame of it, numbered in
   the order you first saw them.
 - **Slideshow** — full-screen review of the keepers (or the rejects, for a
@@ -58,6 +58,44 @@ separate, deliberate act behind a dry run and an exact confirmation string.
 _Coming: the library grouped by outing, the burst compare view, and the life
 list._
 
+## Identification
+
+**This feature is optional and the app is fully useful without it.** Culling,
+bursts, outings, the life list, export — none of it needs a model. Without one,
+type the common and scientific name into the detail panel, which is what you'd
+be doing from a field guide anyway. The life list fills up either way.
+
+If you do want it, there are two paths.
+
+### A local model, through Ollama
+
+Free, private, and nothing leaves your machine. [Install
+Ollama](https://ollama.com), then pull any vision model:
+
+```bash
+ollama pull llama3.2-vision      # the default; ~8GB, needs a reasonable GPU
+ollama pull moondream            # ~1.7GB, runs on modest hardware
+ollama pull llava                # ~4.7GB, a middle option
+```
+
+Set which one under Settings → Identify, or per library in
+`<library>/identify.json`. Any Ollama model that accepts images works — larger
+ones are better at species, smaller ones are faster and run on less.
+
+### An API key
+
+Settings → Identify → xAI, and paste a key. The preview image is sent to the
+provider; nothing else is. The key is stored in your library folder, not in
+this repository.
+
+### Accuracy, honestly
+
+Vision models are a first guess, not an authority. They are reasonably good at
+common, distinctive species and confidently wrong about hard ones — subspecies,
+juveniles, anything where the field marks are subtle. Everything a model writes
+is editable, and low-confidence results are worth treating as a prompt to look
+it up rather than an answer.
+
 ## Requirements
 
 - Windows (the desktop shell is built and tested there; the worker is portable)
@@ -65,6 +103,8 @@ list._
 - Node 20+ and Rust, for building the desktop shell
 - Optional: [`exiftool`](https://exiftool.org/) on `PATH` for better RAW GPS and
   metadata; `rawpy` for better RAW thumbnails
+- Optional, for species identification only: [Ollama](https://ollama.com) with a
+  vision model, or an xAI API key — see [Identification](#identification)
 
 ## Install
 

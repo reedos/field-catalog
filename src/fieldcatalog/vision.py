@@ -13,6 +13,11 @@ from .animal import infer_animal_type
 
 TYPES = {"bird", "mammal", "herp", "fish", "invertebrate", "other"}
 
+# Any Ollama vision model works; this is only the default for a fresh library.
+# Chosen because `ollama pull llama3.2-vision` works on an ordinary machine.
+# Override per library in identify.json, or with OLLAMA_VISION_MODEL.
+DEFAULT_OLLAMA_MODEL = "llama3.2-vision"
+
 PROMPT = (
     "You are a careful field ornithologist / wildlife identifier. Identify the animal. "
     "Prefer North American taxa if ambiguous. Return ONLY JSON:\n"
@@ -164,7 +169,7 @@ def load_config(library: Path | None = None) -> dict:
     cfg = {
         "backend": "ollama",
         "ollama_url": os.environ.get("OLLAMA_HOST") or "http://127.0.0.1:11434",
-        "ollama_model": os.environ.get("OLLAMA_VISION_MODEL") or "muse-glimmer:30b",
+        "ollama_model": os.environ.get("OLLAMA_VISION_MODEL") or DEFAULT_OLLAMA_MODEL,
     }
     if library:
         p = config_path(library)
@@ -212,7 +217,7 @@ def identify_preview(
 
 def identify_ollama(b64: str, cfg: dict, *, cancel: CancelToken | None = None) -> dict:
     url = str(cfg.get("ollama_url") or "http://127.0.0.1:11434").rstrip("/") + "/api/chat"
-    model = str(cfg.get("ollama_model") or "muse-glimmer:30b")
+    model = str(cfg.get("ollama_model") or DEFAULT_OLLAMA_MODEL)
     body = {
         "model": model,
         "stream": False,
@@ -229,8 +234,22 @@ def identify_ollama(b64: str, cfg: dict, *, cancel: CancelToken | None = None) -
     }
     try:
         payload = _post_json(url, body, {}, timeout=300, cancel=cancel)
-    except IdentifyError:
+    except IdentifyError as e:
+        detail = str(e)
+        if "not found" in detail.lower() or "404" in detail:
+            raise IdentifyError(
+                f"Ollama has no model named {model!r}. Pull it with "
+                f"`ollama pull {model}`, or pick another vision model in "
+                f"Settings. Identification is optional -- you can type species "
+                f"names in the detail panel instead."
+            ) from e
         raise
+    except (ConnectionError, OSError) as e:
+        raise IdentifyError(
+            f"Could not reach Ollama at {cfg.get('ollama_url')}. Start it with "
+            f"`ollama serve`, switch Identify to xAI in Settings, or type "
+            f"species names by hand -- identification is optional."
+        ) from e
     except Exception as e:
         raise IdentifyError(f"Ollama ({model}): {e}") from e
     text = ""

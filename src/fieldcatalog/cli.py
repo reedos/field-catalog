@@ -585,7 +585,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     si = sub.add_parser("set-identify", help="choose local Ollama or xAI for Identify")
     si.add_argument("--backend", choices=["ollama", "xai"])
-    si.add_argument("--model", default=None, help="Ollama model name, e.g. muse-glimmer:30b")
+    si.add_argument("--model", default=None, help="Ollama vision model name, e.g. llama3.2-vision")
     si.add_argument("--url", default=None, help="Ollama base URL")
     si.set_defaults(func=cmd_set_identify)
 
