@@ -35,6 +35,11 @@ which lacks `send2trash`, and `test_delete_uses_the_recycle_bin_by_default` fail
 
 **Build gotcha:** close any running `field-catalog.exe` before rebuilding, or the Rust link step fails.
 
+**Releases:** `scriptselease.ps1 -Version x.y.z` does the whole cut — version bump across
+tauri.conf.json, package.json, Cargo.toml and pyproject.toml, tests, build, tag, push, GitHub
+release. It refuses if the app is running, the tree is dirty, the version is not higher, or the tag
+exists. Never change `identifier` in tauri.conf.json: it is the upgrade key.
+
 **Installer:** `npm run build:installer` builds the standalone worker
 (`src-tauriinariesieldcatalog.exe`, PyInstaller onefile) and bundles it beside the app exe.
 `find_cli()` prefers that installed copy; the dev venv is its last fallback. The worker exe must be

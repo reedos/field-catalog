@@ -70,3 +70,24 @@ Match the surrounding style rather than introducing a new one. Comments explain
 Never include real photograph paths, GPS coordinates, or catalog contents in an
 issue. `doctor` output and a screenshot of a scratch library are enough for
 almost any bug.
+
+## Cutting a release
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scriptselease.ps1 -Version 0.2.0
+```
+
+That bumps the version in all four files that carry it, checks they agree, runs
+the tests and typecheck, builds the worker and the installer, commits, tags,
+pushes, and creates the GitHub release with the installer attached.
+
+It refuses rather than half-finishing: if the app is running (Windows cannot
+replace a running executable), if the tree is dirty, if the version is not
+higher than the current one, or if the tag already exists.
+
+`-DryRun` reports what it would do. `-SkipPublish` builds and tags without
+pushing.
+
+Never change `identifier` in `src-tauri/tauri.conf.json` — it is the key
+Windows uses to recognise an installed copy, and changing it turns an upgrade
+into a second parallel install.
