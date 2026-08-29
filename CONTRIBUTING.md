@@ -74,7 +74,7 @@ almost any bug.
 ## Cutting a release
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scriptselease.ps1 -Version 0.2.0
+powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.2.0
 ```
 
 That bumps the version in all four files that carry it, checks they agree, runs
