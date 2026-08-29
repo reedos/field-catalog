@@ -1,0 +1,40 @@
+name: Bug report
+description: Something behaves differently than it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please don't include real photograph paths, coordinates, or catalog
+        contents. `doctor` output and a scratch-library screenshot are enough
+        for almost any bug.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what happened, and what you expected instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How are you running it
+      options:
+        - Installer
+        - From source (tauri dev)
+        - The worker CLI only
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: doctor output
+      description: "`fieldcatalog --library <your library> doctor` — reports integrity without disclosing your photographs."
+      render: json

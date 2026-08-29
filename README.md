@@ -10,6 +10,16 @@ telemetry. The catalog is a SQLite file you own.
 **Reject never deletes.** Verdicts are marks; removing a file from disk is a
 separate, deliberate act behind a dry run and an exact confirmation string.
 
+> **Status.** A personal tool, shared in case it is useful. Developed and tested
+> on Windows against a Nikon D850 library of a few thousand frames. The worker
+> is portable Python, but the desktop shell has only ever been built and run on
+> Windows — macOS and Linux are unverified rather than unsupported.
+>
+> Bug reports are welcome. Feature requests are too, when they suit the workflow
+> and keep the safety guarantees intact — see
+> [CONTRIBUTING.md](CONTRIBUTING.md) for what that means in practice. Fixes may
+> be slow.
+
 ## What it does
 
 - **Import** a card without moving or copying originals — only a compressed
@@ -29,6 +39,24 @@ separate, deliberate act behind a dry run and an exact confirmation string.
   second opinion) in the current view.
 - **Export** keepers to a folder with a metadata CSV, then optionally offload
   the originals once the copy is verified.
+
+## Screenshots
+
+<!--
+  Add images to docs/screenshots/ and reference them here, for example:
+
+  ![The library, grouped by outing](docs/screenshots/library.png)
+  ![Comparing a burst](docs/screenshots/compare.png)
+  ![The life list](docs/screenshots/life-list.png)
+
+  Take them against a scratch library, not your own: a screenshot of the real
+  thing publishes your filenames, species, place names and capture dates.
+  `python -m fieldcatalog ... init` a throwaway library and import a handful of
+  frames you are happy to show.
+-->
+
+_Coming: the library grouped by outing, the burst compare view, and the life
+list._
 
 ## Requirements
 

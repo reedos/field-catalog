@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest something the app should do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Requests are welcome when they suit the workflow this app is for and
+        keep its safety guarantees intact. See
+        [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) — the two questions
+        below are the ones that decide it.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The situation while culling, not the solution you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+    validations:
+      required: true
+  - type: checkboxes
+    id: fit
+    attributes:
+      label: Does it fit
+      options:
+        - label: It serves culling a card fast, locally, for one photographer — not a general photo manager, cloud service, or multi-user product.
+        - label: It keeps the safety rules — reject never deletes, dry run before removal, GPS only from EXIF, previews always survive, originals never moved.
