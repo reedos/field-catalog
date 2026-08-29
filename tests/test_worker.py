@@ -1057,3 +1057,58 @@ def test_export_refuses_the_preview_library(tmp_path: Path):
         assert False, "must refuse the preview folder"
     except ExportError:
         pass
+
+
+def test_resolved_bursts_leave_the_queue(tmp_path: Path):
+    """A burst with nothing unrated has been dealt with and should not keep
+    showing up in the Bursts view."""
+    from argparse import Namespace
+
+    from fieldcatalog.cli import cmd_bursts
+
+    src = tmp_path / "card"
+    src.mkdir()
+    for i in range(4):
+        Image.new("RGB", (80, 60), (i * 30, 80, 40)).save(src / f"DSC_{i:04d}.jpg", "JPEG")
+    lib = tmp_path / "library"
+    cat = Catalog(lib)
+    ids = import_paths(cat, sorted(src.glob("*.jpg")))["ids"]
+    # All four land in one burst (same mtime second).
+    assert len({cat.get(i).burst_id for i in ids}) == 1
+
+    def run(all_flag=False):
+        import io
+
+        import fieldcatalog.cli as cli
+
+        buf = io.StringIO()
+        cli._CAPTURE.buf = buf
+        try:
+            cmd_bursts(Namespace(library=str(lib), all=all_flag))
+        finally:
+            cli._CAPTURE.buf = None
+        return json.loads(buf.getvalue())
+
+    before = run()
+    assert len(before["bursts"]) == 1
+    assert before["resolved"] == 0
+    assert before["bursts"][0]["unrated"] == 4
+
+    # Cull it the way compare's Enter does: one keeper, the rest rejected.
+    cat.update(ids[0], verdict="keep")
+    for i in ids[1:]:
+        cat.update(i, verdict="reject")
+
+    after = run()
+    assert after["bursts"] == []          # gone from the queue
+    assert after["resolved"] == 1
+
+    shown = run(all_flag=True)            # ...but findable on request
+    assert len(shown["bursts"]) == 1
+    assert shown["bursts"][0]["unrated"] == 0
+    assert shown["bursts"][0]["keep"] == 1
+    assert shown["bursts"][0]["reject"] == 3
+
+    # A partially decided burst still needs attention.
+    cat.update(ids[3], verdict="unrated")
+    assert len(run()["bursts"]) == 1

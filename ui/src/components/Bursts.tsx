@@ -8,26 +8,56 @@ export default function Bursts(props: {
   onApply: (keepId: string, rejectIds: string[]) => void;
   onOpen: (id: string) => void;
   onCompare: (burstId: string) => void;
+  resolved: number;
+  showResolved: boolean;
+  onShowResolved: (v: boolean) => void;
 }) {
+  const toggle = props.resolved ? (
+    <button
+      type="button"
+      className="fc-btn fc-ghost text-xs"
+      onClick={() => props.onShowResolved(!props.showResolved)}
+    >
+      {props.showResolved
+        ? `Hide ${props.resolved} culled`
+        : `Show ${props.resolved} already culled`}
+    </button>
+  ) : null;
+
   if (!props.bursts.length) {
     return (
-      <div className="p-8 font-serif text-paper-dim">
-        No bursts of two or more frames.
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 font-serif text-paper-dim">
+        <div>
+          {props.resolved && !props.showResolved
+            ? `Every burst is culled — ${props.resolved} decided.`
+            : "No bursts of two or more frames."}
+        </div>
+        {toggle}
       </div>
     );
   }
+
   return (
-    <div className="h-full overflow-auto p-4 space-y-6">
-      {props.bursts.map((b) => (
-        <BurstRow
-          key={b.burst_id}
-          burst={b}
-          shotsById={props.shotsById}
-          onApply={props.onApply}
-          onOpen={props.onOpen}
-          onCompare={props.onCompare}
-        />
-      ))}
+    <div className="fc-scroll h-full p-4">
+      <div className="mb-4 flex items-baseline gap-3">
+        <h2 className="font-serif text-lg text-paper">
+          {props.bursts.length} burst{props.bursts.length === 1 ? "" : "s"}
+          {props.showResolved ? "" : " to decide"}
+        </h2>
+        {toggle}
+      </div>
+      <div className="space-y-6">
+        {props.bursts.map((b) => (
+          <BurstRow
+            key={b.burst_id}
+            burst={b}
+            shotsById={props.shotsById}
+            onApply={props.onApply}
+            onOpen={props.onOpen}
+            onCompare={props.onCompare}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -54,6 +84,11 @@ function BurstRow(props: {
         <h3 className="font-serif">
           {members.length} frames
           {keep?.sharpness != null ? ` · sharpest ${keep.sharpness.toFixed(0)}` : ""}
+          {props.burst.unrated === 0 ? (
+            <span className="ml-2 text-xs text-moss">
+              culled · {props.burst.keep ?? 0} keep, {props.burst.reject ?? 0} reject
+            </span>
+          ) : null}
         </h3>
         <div className="flex gap-2">
           <button

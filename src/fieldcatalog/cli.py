@@ -418,24 +418,35 @@ def cmd_set_identify(ns: argparse.Namespace) -> int:
 
 
 def cmd_bursts(ns: argparse.Namespace) -> int:
+    """Bursts still awaiting a decision. A burst with nothing unrated has been
+    dealt with, so it drops out of the queue unless --all asks for it."""
     cat = _catalog(ns)
     groups = grouped(cat.list())
     picks = []
+    resolved = 0
     for bid, members in groups.items():
         pick = burst_pick(members)
         if not pick:
             continue
+        unrated = sum(1 for m in members if m.verdict == "unrated")
+        if not unrated:
+            resolved += 1
+            if not ns.all:
+                continue
         picks.append(
             {
                 "burst_id": bid,
                 "count": len(members),
+                "unrated": unrated,
+                "keep": sum(1 for m in members if m.verdict == "keep"),
+                "reject": sum(1 for m in members if m.verdict == "reject"),
                 "keep_id": pick.id,
                 "sharpness": pick.sharpness,
                 "member_ids": [m.id for m in members],
                 "reject_ids": [m.id for m in members if m.id != pick.id],
             }
         )
-    return _out(True, bursts=picks)
+    return _out(True, bursts=picks, resolved=resolved)
 
 
 def cmd_pending_deletes(ns: argparse.Namespace) -> int:
@@ -578,7 +589,9 @@ def build_parser() -> argparse.ArgumentParser:
     si.add_argument("--url", default=None, help="Ollama base URL")
     si.set_defaults(func=cmd_set_identify)
 
-    sub.add_parser("bursts", help="recommended keep per burst").set_defaults(func=cmd_bursts)
+    br = sub.add_parser("bursts", help="bursts awaiting a decision; --all includes resolved ones")
+    br.add_argument("--all", action="store_true", help="include bursts already culled")
+    br.set_defaults(func=cmd_bursts)
 
     pd = sub.add_parser("pending-deletes", help="list originals that would be unlinked")
     pd.add_argument("--verdict", default="reject")

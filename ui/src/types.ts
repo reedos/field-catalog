@@ -67,6 +67,9 @@ export interface ListResult {
 export interface BurstPick {
   burst_id: string;
   count: number;
+  unrated?: number;
+  keep?: number;
+  reject?: number;
   keep_id: string;
   sharpness: number | null;
   member_ids?: string[];

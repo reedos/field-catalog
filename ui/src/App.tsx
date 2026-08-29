@@ -72,6 +72,8 @@ export default function App() {
   const identify = useIdentify({ patchShot, setSelectedId, setBusy, setError });
   const [keys, setKeys] = useState<Keymap>(loadKeys);
   const [bursts, setBursts] = useState<BurstPick[]>([]);
+  const [burstsResolved, setBurstsResolved] = useState(0);
+  const [showResolvedBursts, setShowResolvedBursts] = useState(false);
   const [paths, setPaths] = useState({ cli: "", library: "" });
   const [audit, setAudit] = useState<{ts:string;action:string;count:number;bytes:number}[]>([]);
   const [auditOpen, setAuditOpen] = useState(false);
@@ -415,6 +417,8 @@ export default function App() {
 
   /** Keep one frame of a burst and reject the rest, in a single optimistic write. */
   async function keepOneOfBurst(keepId: string, memberIds: string[]) {
+    // A resolved burst leaves the queue; refresh it if that is what we are looking at.
+    if (view === "bursts") setTimeout(() => void loadBursts(), 0);
     recordVerdictUndo(
       memberIds.map((id) => ({ id, next: (id === keepId ? "keep" : "reject") as Verdict })),
     );
@@ -600,11 +604,12 @@ export default function App() {
       setAuditOpen(true);
     } catch {}
   }
-  async function loadBursts() {
+  async function loadBursts(includeResolved = showResolvedBursts) {
     setBusy("Finding bursts…");
     try {
-      const res = await api.bursts();
+      const res = await api.bursts(includeResolved);
       setBursts(res.bursts || []);
+      setBurstsResolved(res.resolved || 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -756,10 +761,14 @@ const verdicts = useMemo(() => {
             onCompare={(burstId) => openCompare(burstId)}
             onOpen={(id) => enterBurst(id)}
             onApply={(keepId, rejectIds) => {
-              void (async () => {
-                await setVerdictOnly(keepId, "keep");
-                for (const id of rejectIds) await setVerdictOnly(id, "reject");
-              })();
+              // One batched, undoable gesture -- same path compare's Enter uses.
+              void keepOneOfBurst(keepId, [keepId, ...rejectIds]);
+            }}
+            resolved={burstsResolved}
+            showResolved={showResolvedBursts}
+            onShowResolved={(v) => {
+              setShowResolvedBursts(v);
+              void loadBursts(v);
             }}
           />
         ) : null}

@@ -154,7 +154,10 @@ export const api = {
     }>(args);
   },
 
-  bursts: () => runWorker<{ bursts: BurstPick[] }>(["bursts"]),
+  bursts: (includeResolved = false) =>
+    runWorker<{ bursts: BurstPick[]; resolved: number }>(
+      includeResolved ? ["bursts", "--all"] : ["bursts"],
+    ),
 
   pendingDeletes: (verdict = "reject") =>
     runWorker<DiskResult>(["pending-deletes", "--verdict", verdict]),
