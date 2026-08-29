@@ -4,11 +4,15 @@ import { fmtDate } from "../lib/format";
 import { previewUrl } from "../lib/preview";
 
 const INTERVALS = [3, 5, 8, 12] as const;
+const CAPTION_KEY = "fieldcatalog.slideshow.caption";
 
 /**
- * Full-screen review of the keepers in the current view. Chrome gets out of
- * the way: the caption fades during playback and returns on pause or mouse
- * move, and the cursor hides while playing.
+ * Full-screen review of the keepers in the current view.
+ *
+ * The caption stays up: in a wildlife catalog the species, place and date are
+ * the point of looking, not decoration. Only the controls fade during
+ * playback. I hides the caption for a clean frame, and that choice is
+ * remembered.
  *
  * Deliberately not a culling surface -- the only write is favorite, the one
  * gesture that belongs in "look at your good photographs".
@@ -25,8 +29,23 @@ export default function Slideshow(props: {
   });
   const [playing, setPlaying] = useState(true);
   const [seconds, setSeconds] = useState<number>(5);
-  const [chromeVisible, setChromeVisible] = useState(true);
+  const [captionVisible, setCaptionVisible] = useState(() => {
+    try {
+      return localStorage.getItem(CAPTION_KEY) !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CAPTION_KEY, captionVisible ? "on" : "off");
+    } catch {
+      // a remembered preference is a nicety, never a failure
+    }
+  }, [captionVisible]);
 
   const shot = props.shots[index] ?? null;
   const total = props.shots.length;
@@ -44,21 +63,21 @@ export default function Slideshow(props: {
     return () => window.clearTimeout(t);
   }, [playing, seconds, index, total]);
 
-  // Chrome hides itself while playing and comes back on any pointer movement.
+  // Only the controls hide themselves while playing; the caption stays.
   useEffect(() => {
     if (!playing) {
-      setChromeVisible(true);
+      setControlsVisible(true);
       return;
     }
-    const t = window.setTimeout(() => setChromeVisible(false), 2500);
+    const t = window.setTimeout(() => setControlsVisible(false), 2500);
     return () => window.clearTimeout(t);
   }, [playing, index]);
 
   function wake() {
-    setChromeVisible(true);
+    setControlsVisible(true);
     if (hideTimer.current) window.clearTimeout(hideTimer.current);
     if (playing) {
-      hideTimer.current = window.setTimeout(() => setChromeVisible(false), 2500);
+      hideTimer.current = window.setTimeout(() => setControlsVisible(false), 2500);
     }
   }
 
@@ -111,7 +130,7 @@ export default function Slideshow(props: {
       case "i":
       case "I":
         e.preventDefault();
-        setChromeVisible((v) => !v);
+        setCaptionVisible((v) => !v);
         break;
       default:
         break;
@@ -143,7 +162,7 @@ export default function Slideshow(props: {
     <div
       className="fixed inset-0 z-[70] bg-black"
       onMouseMove={wake}
-      style={{ cursor: chromeVisible ? "default" : "none" }}
+      style={{ cursor: controlsVisible ? "default" : "none" }}
     >
       {src ? (
         <img
@@ -157,7 +176,7 @@ export default function Slideshow(props: {
 
       <div
         className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 transition-opacity duration-500"
-        style={{ opacity: chromeVisible ? 1 : 0 }}
+        style={{ opacity: captionVisible ? 1 : 0 }}
       >
         <div className="rounded bg-black/45 px-3 py-2 backdrop-blur-sm">
           <div className="font-serif text-xl text-paper">{title}</div>
@@ -168,6 +187,7 @@ export default function Slideshow(props: {
           </div>
           <div className="mt-0.5 text-[11px] text-paper-dim">
             {fmtDate(shot.captured_at)}
+            {shot.animal_type ? ` · ${shot.animal_type}` : ""}
             {shot.stars ? ` · ${"★".repeat(shot.stars)}` : ""}
             {shot.favorite ? " · ★ favorite" : ""}
           </div>
@@ -177,9 +197,11 @@ export default function Slideshow(props: {
         </div>
       </div>
 
+      {/* Faded controls must not still be clickable or focusable. */}
       <div
         className="absolute inset-x-0 bottom-0 flex items-center gap-3 p-5 transition-opacity duration-500"
-        style={{ opacity: chromeVisible ? 1 : 0 }}
+        style={{ opacity: controlsVisible ? 1 : 0, pointerEvents: controlsVisible ? "auto" : "none" }}
+        aria-hidden={!controlsVisible}
       >
         <button type="button" className="fc-btn fc-ghost" onClick={() => step(-1)} aria-label="Previous">
           ←
@@ -216,7 +238,7 @@ export default function Slideshow(props: {
           ))}
         </select>
         <span className="ml-auto text-xs text-paper-dim">
-          Space play/pause · ←/→ step · F favorite · I info · Esc close
+          Space play/pause · ←/→ step · F favorite · I {captionVisible ? "hide" : "show"} caption · Esc close
         </span>
       </div>
 
