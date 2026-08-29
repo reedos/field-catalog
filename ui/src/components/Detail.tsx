@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ANIMAL_TYPES, type AnimalType, type Shot } from "../types";
-import { fmtBytes, fmtDate, fileName, sharpnessMeter } from "../lib/format";
+import { animalLabel, fmtBytes, fmtDate, fileName, sharpnessMeter } from "../lib/format";
 import { previewUrl } from "../lib/preview";
 
 function useFieldMarksSuggestions(all: string[]) {
@@ -264,7 +264,7 @@ export default function Detail(props: {
             <option value="">Animal type</option>
             {ANIMAL_TYPES.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {animalLabel(t)}
               </option>
             ))}
           </select>

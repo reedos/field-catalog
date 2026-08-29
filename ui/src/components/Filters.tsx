@@ -1,4 +1,4 @@
-import { fmtDay } from "../lib/format";
+import { animalLabel, fmtDay } from "../lib/format";
 import type { ReactNode, RefObject } from "react";
 import { ANIMAL_TYPES, type AnimalType, type SortKey, type Verdict } from "../types";
 
@@ -41,7 +41,7 @@ export default function Filters(props: {
         </Pill>
         {ANIMAL_TYPES.map((t) => (
           <Pill key={t} active={props.animal === t} onClick={() => props.onAnimal(t)}>
-            {t}
+            {animalLabel(t)}
           </Pill>
         ))}
       </div>

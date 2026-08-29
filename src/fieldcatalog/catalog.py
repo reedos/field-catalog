@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS shots (
   gps_from_file INTEGER NOT NULL DEFAULT 0,
   preview_width INTEGER,
   preview_height INTEGER,
-  content_hash TEXT
+  content_hash TEXT,
+  life_list_pick INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_shots_verdict ON shots(verdict);
 CREATE INDEX IF NOT EXISTS idx_shots_status ON shots(original_status);
@@ -96,6 +97,13 @@ class Catalog:
                 added = True
         if "content_hash" not in cols:
             self.conn.execute("ALTER TABLE shots ADD COLUMN content_hash TEXT")
+            added = True
+        # Which frame represents a species on the life list, when the automatic
+        # ranking picks badly.
+        if "life_list_pick" not in cols:
+            self.conn.execute(
+                "ALTER TABLE shots ADD COLUMN life_list_pick INTEGER NOT NULL DEFAULT 0"
+            )
             added = True
         # These must come after the column migrations above -- an index in SCHEMA
         # on a migrated column would run before the column exists on an old DB.
@@ -202,6 +210,33 @@ class Catalog:
         )
         self.conn.commit()
         return len(ids)
+
+    def species_key(self, shot: Shot) -> str:
+        """How the life list groups shots. Scientific name wins when present."""
+        return (shot.scientific_name or shot.common_name or "").strip()
+
+    def shots_of_species(self, key: str) -> list[Shot]:
+        if not key:
+            return []
+        return [s for s in self.list() if self.species_key(s) == key]
+
+    def set_life_list_pick(self, shot_id: str) -> Shot | None:
+        """Make this shot represent its species, clearing any previous pick.
+
+        One pick per species, so the flag is cleared across the species rather
+        than globally -- picking a jay must not disturb the heron.
+        """
+        shot = self.get(shot_id)
+        if not shot:
+            return None
+        siblings = [s.id for s in self.shots_of_species(self.species_key(shot)) if s.id != shot_id]
+        if siblings:
+            self.conn.executemany(
+                "UPDATE shots SET life_list_pick = 0 WHERE id = ?", [(i,) for i in siblings]
+            )
+        self.conn.execute("UPDATE shots SET life_list_pick = 1 WHERE id = ?", (shot_id,))
+        self.conn.commit()
+        return self.get(shot_id)
 
     def set_burst_ids(self, pairs: list[tuple[str, str]]) -> int:
         """Write many burst ids in one transaction. Returns the number of rows written."""

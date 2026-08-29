@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Shot } from "../types";
-import { fmtDate } from "../lib/format";
+import { animalLabel, fmtDate } from "../lib/format";
 import { previewUrl } from "../lib/preview";
 
 const INTERVALS = [3, 5, 8, 12] as const;
@@ -258,7 +258,7 @@ export default function Slideshow(props: {
               </span>
             ) : null}
             {fmtDate(shot.captured_at)}
-            {shot.animal_type ? ` · ${shot.animal_type}` : ""}
+            {shot.animal_type ? ` · ${animalLabel(shot.animal_type)}` : ""}
             {shot.stars ? ` · ${"★".repeat(shot.stars)}` : ""}
             {shot.favorite ? " · ★ favorite" : ""}
           </div>

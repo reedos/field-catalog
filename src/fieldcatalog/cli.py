@@ -146,6 +146,7 @@ def shot_json(s: Shot) -> dict:
         "gps_from_file": bool(s.gps_from_file),
         "preview_width": s.preview_width,
         "preview_height": s.preview_height,
+        "life_list_pick": bool(s.life_list_pick),
     }
 
 
@@ -376,6 +377,49 @@ def cmd_identify(ns: argparse.Namespace) -> int:
 
 def cmd_identify_cancel(ns: argparse.Namespace) -> int:
     return _out(True, cancelled=_identify_cancel())
+
+
+# Fields an identification writes. Clearing one means clearing all of them:
+# if the species is wrong, the notes and field marks written about it are too.
+IDENTITY_FIELDS = ("common_name", "scientific_name", "confidence",
+                   "field_marks", "similar_species", "notes")
+
+
+def cmd_life_list_pick(ns: argparse.Namespace) -> int:
+    """Choose which frame represents a species on the life list."""
+    cat = _catalog(ns)
+    if ns.clear:
+        shot = cat.update(ns.id, life_list_pick=False)
+        return _out(True, shot=shot_json(shot)) if shot else _out(False, error="unknown id")
+    shot = cat.set_life_list_pick(ns.id)
+    return _out(True, shot=shot_json(shot)) if shot else _out(False, error="unknown id")
+
+
+def cmd_clear_identity(ns: argparse.Namespace) -> int:
+    """Remove an identification -- one shot, or every shot of a species.
+
+    A shot with no name drops out of the life list, which is how a species that
+    should never have been listed is removed.
+    """
+    cat = _catalog(ns)
+    if ns.species:
+        targets = cat.shots_of_species(ns.species)
+        if not targets:
+            return _out(False, error=f"no shots identified as {ns.species!r}")
+    elif ns.id:
+        shot = cat.get(ns.id)
+        if not shot:
+            return _out(False, error="unknown id")
+        targets = [shot]
+    else:
+        return _out(False, error="pass --id or --species")
+
+    blanks = {f: None for f in IDENTITY_FIELDS}
+    blanks["life_list_pick"] = False
+    cat.update_many([s.id for s in targets], **blanks)
+    return _out(True, cleared=len(targets),
+                ids=[s.id for s in targets],
+                species=ns.species or None)
 
 
 def cmd_set_key(ns: argparse.Namespace) -> int:
@@ -626,6 +670,16 @@ def build_parser() -> argparse.ArgumentParser:
     fm = sub.add_parser("field-marks", help="list distinct field marks")
     fm.add_argument("--limit", type=int, default=200)
     fm.set_defaults(func=cmd_field_marks)
+
+    lp = sub.add_parser("life-list-pick", help="choose which frame represents a species")
+    lp.add_argument("--id", required=True)
+    lp.add_argument("--clear", action="store_true", help="unset the pick, back to automatic")
+    lp.set_defaults(func=cmd_life_list_pick)
+
+    ci = sub.add_parser("clear-identity", help="remove an identification from a shot or a whole species")
+    ci.add_argument("--id", default="", help="a single shot")
+    ci.add_argument("--species", default="", help="every shot identified as this species")
+    ci.set_defaults(func=cmd_clear_identity)
 
     ic = sub.add_parser("identify-cancel", help="abort the in-flight identify (serve mode)")
     ic.set_defaults(func=cmd_identify_cancel)

@@ -48,11 +48,13 @@ class Shot:
     preview_width: Optional[int] = None
     preview_height: Optional[int] = None
     content_hash: Optional[str] = None
+    life_list_pick: bool = False
 
     def to_row(self) -> dict[str, Any]:
         d = asdict(self)
         d["favorite"] = int(self.favorite)
         d["gps_from_file"] = int(self.gps_from_file)
+        d["life_list_pick"] = int(self.life_list_pick)
         d["tags"] = ",".join(self.tags)
         d["field_marks"] = json.dumps(self.field_marks)
         d["similar_species"] = json.dumps(self.similar_species)
@@ -99,6 +101,7 @@ class Shot:
             preview_width=_col(row, "preview_width"),
             preview_height=_col(row, "preview_height"),
             content_hash=_col(row, "content_hash"),
+            life_list_pick=bool(_col(row, "life_list_pick") or 0),
         )
 
 

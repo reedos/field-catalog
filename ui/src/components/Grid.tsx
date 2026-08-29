@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Shot } from "../types";
-import { captureDay, fmtDay, focusScore, starsLabel } from "../lib/format";
+import { animalLabel, captureDay, fmtDay, focusScore, starsLabel } from "../lib/format";
 import { previewUrl } from "../lib/preview";
 
 const GAP = 8;
@@ -407,7 +407,7 @@ function Cell(props: {
         <div className="text-[13px] leading-tight truncate text-paper">{shot.common_name || "Needs ID"}</div>
         <div className="text-[11px] italic text-paper-dim truncate">{shot.scientific_name || " "}</div>
         <div className="text-[10px] text-paper-dim truncate mt-0.5">
-          {shot.animal_type || "—"} · {shot.location || "—"}
+          {animalLabel(shot.animal_type) || "—"} · {shot.location || "—"}
         </div>
         <div className="text-[10px] text-ochre mt-0.5">
           {starsLabel(shot.stars)} · {focusScore(shot)}

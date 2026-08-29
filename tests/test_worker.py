@@ -1,3 +1,4 @@
+import io
 import json
 from datetime import datetime
 from fractions import Fraction
@@ -1150,3 +1151,87 @@ def test_resolved_bursts_leave_the_queue(tmp_path: Path):
     # A partially decided burst still needs attention.
     cat.update(ids[3], verdict="unrated")
     assert len(run()["bursts"]) == 1
+
+
+# --- life list curation ------------------------------------------------------
+
+
+def _species_library(tmp_path: Path):
+    """Three jays and one heron, so picks and clears can be scoped."""
+    cat = Catalog(tmp_path / "library")
+    for i in range(3):
+        cat.upsert(Shot(id=f"jay{i}", original_path=f"j{i}.jpg", preview_path=f"j{i}.jpg",
+                        common_name="Steller's Jay", scientific_name="Cyanocitta stelleri",
+                        animal_type="bird", sharpness=float(i)))
+    cat.upsert(Shot(id="heron", original_path="h.jpg", preview_path="h.jpg",
+                    common_name="Great Blue Heron", scientific_name="Ardea herodias",
+                    animal_type="bird"))
+    return cat
+
+
+def test_life_list_pick_is_one_per_species(tmp_path: Path):
+    cat = _species_library(tmp_path)
+    cat.set_life_list_pick("heron")
+
+    cat.set_life_list_pick("jay0")
+    assert cat.get("jay0").life_list_pick is True
+
+    # Picking a different jay moves the pick within that species...
+    cat.set_life_list_pick("jay2")
+    assert cat.get("jay2").life_list_pick is True
+    assert cat.get("jay0").life_list_pick is False
+    # ...and leaves other species alone.
+    assert cat.get("heron").life_list_pick is True
+
+    assert cat.set_life_list_pick("nope") is None
+
+
+def test_clearing_one_shot_leaves_the_species(tmp_path: Path):
+    from argparse import Namespace
+
+    import fieldcatalog.cli as cli
+    from fieldcatalog.cli import cmd_clear_identity
+
+    cat = _species_library(tmp_path)
+    cat.update("jay1", notes="a note", field_marks='["black bib"]')
+
+    buf = io.StringIO()
+    cli._CAPTURE.buf = buf
+    try:
+        cmd_clear_identity(Namespace(library=str(tmp_path / "library"), id="jay1", species=""))
+    finally:
+        cli._CAPTURE.buf = None
+    assert json.loads(buf.getvalue())["cleared"] == 1
+
+    gone = cat.get("jay1")
+    assert gone.common_name is None and gone.scientific_name is None
+    assert gone.notes == "" and gone.field_marks == []
+    # The other two jays still hold the species.
+    assert cat.get("jay0").common_name == "Steller's Jay"
+    assert len(cat.shots_of_species("Cyanocitta stelleri")) == 2
+
+
+def test_clearing_a_species_removes_it_from_the_life_list(tmp_path: Path):
+    from argparse import Namespace
+
+    import fieldcatalog.cli as cli
+    from fieldcatalog.cli import cmd_clear_identity
+
+    cat = _species_library(tmp_path)
+    cat.set_life_list_pick("jay0")
+
+    buf = io.StringIO()
+    cli._CAPTURE.buf = buf
+    try:
+        cmd_clear_identity(Namespace(library=str(tmp_path / "library"), id="",
+                                     species="Cyanocitta stelleri"))
+    finally:
+        cli._CAPTURE.buf = None
+    assert json.loads(buf.getvalue())["cleared"] == 3
+
+    assert cat.shots_of_species("Cyanocitta stelleri") == []
+    assert all(cat.get(f"jay{i}").common_name is None for i in range(3))
+    # Clearing drops the pick with it, so a later re-identification starts fresh.
+    assert cat.get("jay0").life_list_pick is False
+    # The heron is untouched.
+    assert cat.get("heron").common_name == "Great Blue Heron"

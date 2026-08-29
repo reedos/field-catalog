@@ -45,3 +45,9 @@ export function fmtDay(day: string): string {
 export function captureDay(capturedAt: string | null | undefined): string {
   return (capturedAt || "").slice(0, 10);
 }
+
+/** Animal types are stored lowercase as an enum; they read better capitalised. */
+export function animalLabel(t: string | null | undefined): string {
+  if (!t) return "";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}

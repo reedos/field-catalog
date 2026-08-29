@@ -120,6 +120,18 @@ export const api = {
     return runWorker<{ shot: Shot }>(args);
   },
 
+  lifeListPick: (id: string, clear = false) =>
+    runWorker<{ shot: Shot }>(clear
+      ? ["life-list-pick", "--id", id, "--clear"]
+      : ["life-list-pick", "--id", id]),
+
+  clearIdentity: (opts: { id?: string; species?: string }) =>
+    runWorker<{ cleared: number; ids: string[] }>(
+      opts.species
+        ? ["clear-identity", "--species", opts.species]
+        : ["clear-identity", "--id", opts.id || ""],
+    ),
+
   identifyCancel: () => runWorker<{ cancelled: boolean }>(["identify-cancel"]),
 
   exportOriginals: (dest: string, verdict = "keep") =>

@@ -50,6 +50,7 @@ export interface Shot {
   similar_species: string[];
   notes: string;
   gps_from_file: boolean;
+  life_list_pick?: boolean;
   preview_width: number | null;
   preview_height: number | null;
 }

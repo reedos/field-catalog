@@ -753,6 +753,38 @@ const verdicts = useMemo(() => {
         {view === "life" ? (
           <LifeList
             shots={shots}
+            onOpenShot={(id) => {
+              setSelectedId(id);
+              setView("library");
+              setDetail(true);
+              nav.record({ view: "library" });
+            }}
+            onPick={(id, clear) => {
+              void (async () => {
+                try {
+                  await api.lifeListPick(id, !!clear);
+                  await reload();
+                } catch (e) { fail(e); }
+              })();
+            }}
+            onClearSpecies={(key, common) => {
+              void (async () => {
+                const ok = window.confirm(
+                  `Remove ${common} from the life list?
+
+` +
+                  `This clears the identification from every shot of it — the ` +
+                  `photographs are untouched, and you can identify them again.`,
+                );
+                if (!ok) return;
+                try {
+                  const res = await api.clearIdentity({ species: key });
+                  await reload();
+                  setBusy(`Cleared ${common} from ${res.cleared} shot${res.cleared === 1 ? "" : "s"}`);
+                  setTimeout(() => setBusy(""), 4000);
+                } catch (e) { fail(e); }
+              })();
+            }}
             onOpenSpecies={(name) => {
               setSearch(name);
               setView("library");
