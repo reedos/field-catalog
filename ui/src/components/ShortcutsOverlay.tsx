@@ -61,6 +61,14 @@ export default function ShortcutsOverlay({ keys, view, onClose }: { keys: Keymap
           ))}
         </div>
         <div className="mt-6 pt-4 border-t border-bark">
+          <div className="text-sm font-medium text-bark mb-2">Slideshow</div>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="text-bark/80">Play / pause</div><div>Space</div>
+            <div className="text-bark/80">Step</div><div>arrows or j/k</div>
+            <div className="text-bark/80">Favorite · info · close</div><div>f · i · Esc</div>
+          </div>
+        </div>
+        <div className="mt-6 pt-4 border-t border-bark">
           <div className="text-sm font-medium text-bark mb-2">Compare view</div>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="text-bark/80">Focus frame</div><div>arrows or j/k</div>

@@ -35,6 +35,9 @@
       shot and orphans the old row
 
 ## Done
+- [x] Keepers slideshow: full-screen review of the keepers in the current view,
+      auto-advance with adjustable dwell, self-hiding chrome, favorite from the
+      slide
 - [x] Accessibility: dialog semantics and focus trapping on all five overlays,
       grid listbox/option roles, Enter-to-open, labelled star rating, live region
       for busy text

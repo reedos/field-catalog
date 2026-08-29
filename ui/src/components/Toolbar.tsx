@@ -23,6 +23,7 @@ export default function Toolbar(props: {
   onDelete: () => void;
   onOffload: () => void;
   onExport: () => void;
+  onSlideshow: () => void;
   onIdentifySeries: () => void;
   onCancelIdentify: () => void;
   identifyingSeries: boolean;
@@ -115,6 +116,17 @@ export default function Toolbar(props: {
           className="fc-btn border-moss bg-moss text-paper hover:bg-moss-dark hover:border-moss-dark"
         >
           Import folder
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            props.onSlideshow();
+          }}
+          className="fc-btn fc-ghost"
+          title="Full-screen review of the keepers in view"
+        >
+          Slideshow
         </button>
         <span className="mx-0.5 h-5 w-px bg-bark" aria-hidden />
         <button

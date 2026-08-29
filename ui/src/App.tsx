@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent
 import { open } from "@tauri-apps/plugin-dialog";
 import Bursts from "./components/Bursts";
 import CompareView from "./components/CompareView";
+import Slideshow from "./components/Slideshow";
 import AuditLog from "./components/AuditLog";
 import Detail from "./components/Detail";
 import DiskDialog from "./components/DiskDialog";
@@ -79,6 +80,7 @@ export default function App() {
   const [auditOpen, setAuditOpen] = useState(false);
   const [burstReviewId, setBurstReviewId] = useState<string | null>(null);
   const [compareBurstId, setCompareBurstId] = useState<string | null>(null);
+  const [slideshow, setSlideshow] = useState(false);
   const [pickedIds, setPickedIds] = useState<Set<string>>(() => new Set());
   const searchRef = useRef<HTMLInputElement>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -246,6 +248,15 @@ export default function App() {
     setView("library");
     nav.record({ day: d, verdict: "unrated", view: "library" });
   }
+
+  const slideshowShots = useMemo(
+    () =>
+      filtered
+        .filter((s) => s.verdict === "keep")
+        .slice()
+        .sort((a, b) => (a.captured_at || "").localeCompare(b.captured_at || "")),
+    [filtered],
+  );
 
   function openCompare(burstId: string | null | undefined) {
     if (!burstId) return;
@@ -447,7 +458,7 @@ export default function App() {
   }
 
   function onKey(e: KeyboardEvent) {
-    if (compareBurstId) return; // CompareView runs its own keyboard while open
+    if (compareBurstId || slideshow) return; // those overlays own the keyboard
     {
       // Anything modal swallows the cull keys. Without this, x and p write
       // verdicts to the shot sitting behind the open dialog.
@@ -652,6 +663,10 @@ const verdicts = useMemo(() => {
         onDelete={() => void diskFlow.openDelete()}
         onOffload={() => void diskFlow.openOffload()}
         onExport={() => void onExportKeepers()}
+        onSlideshow={() => {
+          setDetail(false);
+          setSlideshow(true);
+        }}
         onIdentifySeries={() => void identify.runIdentifySeries(filtered, pickedIds)}
         onCancelIdentify={identify.cancel}
         identifyingSeries={identify.identifyingSeries}
@@ -897,6 +912,14 @@ const verdicts = useMemo(() => {
           }}
         />
       )}
+      {slideshow ? (
+        <Slideshow
+          shots={slideshowShots}
+          startId={selected?.verdict === "keep" ? selected.id : null}
+          onFavorite={(id) => void toggleFavorite(id)}
+          onClose={() => setSlideshow(false)}
+        />
+      ) : null}
       {compareBurstId ? (
         <CompareView
           members={compareMembers}
