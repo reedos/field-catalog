@@ -211,4 +211,14 @@ need `send2trash`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[Functional Source License 1.1, MIT Future](LICENSE.md) (`FSL-1.1-MIT`).
+
+In plain terms: **use it for anything you like, including your paid work.** Read
+it, modify it, run it on client shoots, share your changes. The one thing you
+may not do is turn it into a competing commercial product.
+
+Each release becomes plain MIT two years after it is published, automatically
+and irrevocably — so nothing here is ever locked away for good.
+
+Source-available rather than open source, deliberately: the commercial rights
+stay with the author for now.

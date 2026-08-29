@@ -65,6 +65,17 @@ Match the surrounding style rather than introducing a new one. Comments explain
 - Anything that moves or copies originals into the library
 - A rewrite in a different stack
 
+## Licensing of contributions
+
+This project is under the [Functional Source License](LICENSE.md), and the
+author reserves the commercial rights. So that those rights stay whole, by
+opening a pull request you agree that your contribution may be relicensed by
+the author, including under a commercial or proprietary license.
+
+If that isn't something you're comfortable with, open an issue describing the
+change instead — a good bug report or a well-argued design suggestion is worth
+as much as a patch, and carries none of this baggage.
+
 ## Privacy
 
 Never include real photograph paths, GPS coordinates, or catalog contents in an

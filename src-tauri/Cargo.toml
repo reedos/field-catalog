@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Field Catalog desktop"
 authors = ["fieldcatalog"]
 edition = "2021"
+license-file = "../LICENSE.md"
+publish = false
 
 [lib]
 name = "field_catalog_lib"

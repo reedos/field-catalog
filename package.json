@@ -10,5 +10,6 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
-  }
+  },
+  "license": "LicenseRef-FSL-1.1-MIT"
 }
