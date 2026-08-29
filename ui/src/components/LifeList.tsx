@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { Shot } from "../types";
 import { animalLabel, fmtDay } from "../lib/format";
 import { previewUrl } from "../lib/preview";
+import { betterShot } from "../lib/ranking";
 
 type Species = {
   key: string;
@@ -282,11 +283,8 @@ export default function LifeList(props: {
   );
 }
 
-/** The frame that represents a species when you have not chosen one. */
-function better(a: Shot, b: Shot): boolean {
-  const keepA = a.verdict === "keep" ? 1 : 0;
-  const keepB = b.verdict === "keep" ? 1 : 0;
-  if (keepA !== keepB) return keepA > keepB;
-  if ((a.stars || 0) !== (b.stars || 0)) return (a.stars || 0) > (b.stars || 0);
-  return (a.sharpness ?? -1) > (b.sharpness ?? -1);
-}
+/**
+ * The frame that represents a species when you have not chosen one. Shared
+ * with the map popups so "best photo of this species" means one thing.
+ */
+const better = betterShot;

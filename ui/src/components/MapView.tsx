@@ -2,7 +2,42 @@ import { useEffect, useMemo, useState } from "react";
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
 import type { Shot } from "../types";
 import { previewUrl } from "../lib/preview";
+import { bestShot, speciesKey } from "../lib/ranking";
 import "leaflet/dist/leaflet.css";
+
+/**
+ * What a place is worth showing: the species found there, not the shots.
+ * Twenty frames of one jay is one line, so a popup lists as many different
+ * animals as it can fit rather than the same one over and over.
+ */
+function speciesAt(shots: Shot[]) {
+  const groups = new Map<string, Shot[]>();
+  const unidentified: Shot[] = [];
+  for (const s of shots) {
+    const key = speciesKey(s);
+    if (!key) {
+      unidentified.push(s);
+      continue;
+    }
+    const g = groups.get(key);
+    if (g) g.push(s);
+    else groups.set(key, [s]);
+  }
+  const rows = [...groups.values()].map((g) => {
+    const best = bestShot(g);
+    return { key: speciesKey(best), name: best.common_name || speciesKey(best), count: g.length, best };
+  });
+  rows.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  if (unidentified.length) {
+    rows.push({
+      key: "__unidentified__",
+      name: "Unidentified",
+      count: unidentified.length,
+      best: bestShot(unidentified),
+    });
+  }
+  return rows;
+}
 
 export default function MapView(props: {
   shots: Shot[];
@@ -62,17 +97,7 @@ export default function MapView(props: {
                 {c.shots.length === 1 ? (
                   <PinCard shot={c.shots[0]} onOpen={props.onOpen} onLocation={props.onLocation} />
                 ) : (
-                  <div className="w-48">
-                    <div className="text-xs mb-2">{c.shots.length} shots in area</div>
-                    {c.shots.slice(0, 6).map((s) => (
-                      <div key={s.id} className="text-xs flex gap-2 items-center">
-                        <img src={previewUrl(s.preview_path)} alt="" className="w-8 h-8 object-cover" />
-                        <button className="underline" onClick={() => props.onOpen(s.id)}>
-                          {s.common_name || "Needs ID"}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                  <SpeciesList shots={c.shots} onOpen={props.onOpen} />
                 )}
               </Popup>
             </CircleMarker>
@@ -84,6 +109,43 @@ export default function MapView(props: {
           ? `${pins.length} file GPS pin${pins.length === 1 ? "" : "s"}`
           : "No file GPS in this library. Place names are labels only."}
       </div>
+    </div>
+  );
+}
+
+/** One row per species found here, best frame first, most-photographed first. */
+function SpeciesList(props: { shots: Shot[]; onOpen: (id: string) => void }) {
+  const rows = useMemo(() => speciesAt(props.shots), [props.shots]);
+  const shown = rows.slice(0, 8);
+  return (
+    <div className="w-56 font-sans text-ink">
+      <div className="mb-2 text-xs">
+        {rows.length} species · {props.shots.length} shots here
+      </div>
+      <div className="flex flex-col gap-1">
+        {shown.map((r) => (
+          <button
+            key={r.key}
+            type="button"
+            onClick={() => props.onOpen(r.best.id)}
+            className="flex items-center gap-2 rounded-sm p-0.5 text-left text-xs hover:bg-black/5"
+            title={`Open the best frame of ${r.name}`}
+          >
+            <img
+              src={previewUrl(r.best.preview_path)}
+              alt=""
+              className="h-8 w-8 shrink-0 rounded-sm object-cover"
+            />
+            <span className="min-w-0 flex-1 truncate underline">{r.name}</span>
+            {r.count > 1 ? <span className="shrink-0 text-neutral-500">{r.count}</span> : null}
+          </button>
+        ))}
+      </div>
+      {rows.length > shown.length ? (
+        <div className="mt-1.5 text-[11px] text-neutral-600">
+          and {rows.length - shown.length} more species
+        </div>
+      ) : null}
     </div>
   );
 }
