@@ -10,7 +10,8 @@ type Species = {
   type: string | null;
   count: number;
   firstSeen: string; // capture day, YYYY-MM-DD ("" when unknown)
-  best: Shot;
+  best: Shot; // what the plate actually shows
+  recommended: Shot; // what the ranking would choose, chosen or not
   shots: Shot[];
   chosen: boolean; // the plate was picked by hand rather than ranked
 };
@@ -50,6 +51,7 @@ export default function LifeList(props: {
           count: 1,
           firstSeen: day,
           best: s,
+          recommended: s,
           shots: [s],
           chosen: !!s.life_list_pick,
         });
@@ -58,6 +60,9 @@ export default function LifeList(props: {
       cur.count += 1;
       cur.shots.push(s);
       if (day && (!cur.firstSeen || day < cur.firstSeen)) cur.firstSeen = day;
+      // The recommendation is tracked whether or not it is being used, so the
+      // picker can still show what the app would choose after you overrule it.
+      if (better(s, cur.recommended)) cur.recommended = s;
       // An explicit pick wins outright; otherwise fall back to the ranking.
       if (s.life_list_pick) {
         cur.best = s;
@@ -68,7 +73,13 @@ export default function LifeList(props: {
     }
     const all = [...map.values()];
     for (const sp of all) {
-      sp.shots.sort((a, b) => (a.captured_at || "").localeCompare(b.captured_at || ""));
+      // Recommended first so the picker opens on it; the rest chronological.
+      sp.shots.sort((a, b) => {
+        if (a.id === sp.recommended.id) return -1;
+        if (b.id === sp.recommended.id) return 1;
+        return (a.captured_at || "").localeCompare(b.captured_at || "");
+      });
+      if (!sp.chosen) sp.best = sp.recommended;
     }
     // Plate numbers are earned in first-seen order; display stays alphabetical.
     const plateOrder = [...all].sort(
@@ -205,12 +216,15 @@ export default function LifeList(props: {
                   <div className="mb-1.5 text-[11px] text-paper-dim">
                     {sp.count === 1
                       ? "Only one frame of this species."
-                      : "Choose the frame for this plate:"}
+                      : sp.chosen
+                        ? "Your choice is in use. The recommendation is marked."
+                        : "Using the recommended frame. Pick another to overrule it."}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {sp.shots.map((shot) => {
                       const thumb = previewUrl(shot.preview_path);
-                      const isBest = shot.id === sp.best.id;
+                      const inUse = shot.id === sp.best.id;
+                      const isRec = shot.id === sp.recommended.id;
                       return (
                         <button
                           type="button"
@@ -219,16 +233,29 @@ export default function LifeList(props: {
                             props.onPick(shot.id);
                             setPicking(null);
                           }}
-                          className={`h-14 w-20 overflow-hidden rounded-sm transition-shadow ${
-                            isBest ? "ring-2 ring-ochre" : "ring-1 ring-bark hover:ring-moss"
+                          className={`relative h-14 w-20 overflow-hidden rounded-sm transition-shadow ${
+                            inUse ? "ring-2 ring-ochre" : "ring-1 ring-bark hover:ring-moss"
                           }`}
-                          title={shot.display_name || shot.id}
+                          title={
+                            (shot.display_name || shot.id) +
+                            (isRec ? " — recommended" : "") +
+                            (inUse ? " — in use" : "")
+                          }
                         >
                           {thumb ? (
                             <img src={thumb} alt="" className="h-full w-full object-cover" />
                           ) : (
                             <span className="block h-full w-full bg-bark" />
                           )}
+                          {isRec ? (
+                            <span
+                              className={`absolute left-0 top-0 px-1 text-[8px] font-semibold uppercase tracking-wider ${
+                                inUse ? "bg-ochre text-ink" : "bg-moss text-paper"
+                              }`}
+                            >
+                              rec
+                            </span>
+                          ) : null}
                         </button>
                       );
                     })}
@@ -236,13 +263,13 @@ export default function LifeList(props: {
                   {sp.chosen ? (
                     <button
                       type="button"
-                      className="mt-2 text-[11px] text-paper-dim transition-colors hover:text-paper"
+                      className="mt-2 text-[11px] text-moss transition-colors hover:text-paper"
                       onClick={() => {
                         props.onPick(sp.best.id, true);
                         setPicking(null);
                       }}
                     >
-                      Back to automatic
+                      ← Back to the recommended frame
                     </button>
                   ) : null}
                 </div>
