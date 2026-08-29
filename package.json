@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "npm --prefix ui run dev",
     "build": "npm --prefix ui run build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:installer": "powershell -ExecutionPolicy Bypass -File scripts/build-worker.ps1 && tauri build --config src-tauri/tauri.bundle.conf.json"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

@@ -23,14 +23,17 @@
       "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https://asset.localhost blob: data: https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost https://*.tile.openstreetmap.org; font-src 'self' data:",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$HOME/FieldCatalog/**"]
+        "scope": [
+          "$HOME/FieldCatalog/**"
+        ]
       }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "resources": { "binaries/fieldcatalog.exe": "fieldcatalog.exe" },
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

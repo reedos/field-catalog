@@ -35,10 +35,14 @@ which lacks `send2trash`, and `test_delete_uses_the_recycle_bin_by_default` fail
 
 **Build gotcha:** close any running `field-catalog.exe` before rebuilding, or the Rust link step fails.
 
-**Installer:** `powershell -File scriptsuild-worker.ps1` builds the standalone worker
-(`src-tauriinariesieldcatalog.exe`, PyInstaller onefile), then `npm run tauri build` bundles it
-beside the app exe via the `resources` map. `find_cli()` prefers that installed copy; the dev venv is
-its last fallback. The worker exe must be rebuilt whenever the Python changes.
+**Installer:** `npm run build:installer` builds the standalone worker
+(`src-tauriinariesieldcatalog.exe`, PyInstaller onefile) and bundles it beside the app exe.
+`find_cli()` prefers that installed copy; the dev venv is its last fallback. The worker exe must be
+rebuilt whenever the Python changes.
+
+The `resources` map lives in `src-tauri/tauri.bundle.conf.json`, merged via `--config` only for the
+installer build. Keep it out of `tauri.conf.json`: the worker exe is gitignored, and requiring it in
+the base config breaks `tauri dev` and `cargo check` on a fresh clone.
 
 ## Hard rules
 
