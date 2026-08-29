@@ -1,73 +1,146 @@
-# Field Catalog worker
+# Field Catalog
 
-Local catalog for the desktop app. **Previews live in the library. Originals stay on disk until you confirm unlink.**
+A local-first desktop app for culling wildlife photography. Import a card, decide
+what to keep, identify what you photographed, and get the keepers out — without
+uploading anything or moving your originals.
 
-Reject does not delete. Offload is the same unlink with a different confirm string, after you have copied keepers to the cloud.
+Built for one photographer, one machine, one library. No accounts, no cloud, no
+telemetry. The catalog is a SQLite file you own.
 
-Repo: https://github.com/reedos/field-catalog-worker  
-Paste-ready desktop prompt: [DESKTOP_PROMPT.md](DESKTOP_PROMPT.md)
+**Reject never deletes.** Verdicts are marks; removing a file from disk is a
+separate, deliberate act behind a dry run and an exact confirmation string.
+
+## What it does
+
+- **Import** a card without moving or copying originals — only a compressed
+  preview enters the library. RAW files use the embedded JPEG; nothing is
+  demosaiced.
+- **Cull** with the keyboard: `j`/`k` to walk, `p` keep, `x` reject, `f`
+  favorite, `l` for a 1:1 loupe, `Ctrl+Z` to undo.
+- **Compare** a burst: every frame on screen at once with pan and zoom synced
+  across them, culling the pool live until one remains.
+- **Outings** — the library groups by capture day, so a session is a trip
+  rather than a wall of thumbnails.
+- **Identify** species with a local Ollama vision model or the xAI API, one
+  shot or a whole series, cancellable mid-call.
+- **Life list** — one plate per species, your best frame of it, numbered in
+  the order you first saw them.
+- **Slideshow** — full-screen review of the keepers (or the rejects, for a
+  second opinion) in the current view.
+- **Export** keepers to a folder with a metadata CSV, then optionally offload
+  the originals once the copy is verified.
+
+## Requirements
+
+- Windows (the desktop shell is built and tested there; the worker is portable)
+- Python 3.10+
+- Node 20+ and Rust, for building the desktop shell
+- Optional: [`exiftool`](https://exiftool.org/) on `PATH` for better RAW GPS and
+  metadata; `rawpy` for better RAW thumbnails
 
 ## Install
 
 ```bash
 git clone https://github.com/reedos/field-catalog-worker.git
 cd field-catalog-worker
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e .
-# optional, better NEF thumbs: pip install -e ".[raw]"
-# optional, better NEF EXIF: install exiftool
+python -m venv .venv
+.venv\Scripts\activate          # Unix: source .venv/bin/activate
+pip install -e ".[dev]"         # ".[raw]" adds rawpy for NEF thumbnails
+npm install && npm --prefix ui install
 ```
 
-Library default: `~/FieldCatalog/` (`catalog.sqlite` + `previews/*.jpg`).
+Run the desktop app with `Run Field Catalog.bat`, or:
 
-## CLI (JSON on stdout)
+```bash
+npm run tauri -- dev            # desktop window
+npm run dev                     # browser-only UI loop (scripts/dev-browser.bat)
+```
+
+The library lives at `%USERPROFILE%\FieldCatalog` (`$FIELDCATALOG_LIBRARY` to
+override): `catalog.sqlite`, `previews/`, `backups/`, `audit.jsonl`.
+
+### Building an installer
+
+```powershell
+powershell -File scripts\build-worker.ps1   # standalone worker exe
+npm run tauri build                          # bundles it into an NSIS installer
+```
+
+## The worker
+
+All catalog logic lives in a Python CLI that prints JSON on stdout. The desktop
+app is a thin shell over it, and everything the app can do is scriptable.
 
 ```bash
 fieldcatalog --library ~/FieldCatalog init
 fieldcatalog --library ~/FieldCatalog import --source /path/to/card
-fieldcatalog --library ~/FieldCatalog list
+fieldcatalog --library ~/FieldCatalog list --summary
 fieldcatalog --library ~/FieldCatalog set-verdict --id <id> --verdict reject
 fieldcatalog --library ~/FieldCatalog bursts
-fieldcatalog --library ~/FieldCatalog identify --id <id> --common-name "House Sparrow" --scientific-name "Passer domesticus"
+fieldcatalog --library ~/FieldCatalog identify --id <id>
+fieldcatalog --library ~/FieldCatalog export-originals --dest /path/to/handoff
+fieldcatalog --library ~/FieldCatalog backup
+fieldcatalog --library ~/FieldCatalog doctor --fix
+```
 
-# 1) see what would be unlinked
-fieldcatalog --library ~/FieldCatalog pending-deletes --verdict reject
+Every command prints `{"ok": true|false, ...}`. Progress goes to stderr, so
+stdout stays parseable. `--pretty` indents it for reading by hand.
 
-# 2) dry-run (default)
+`fieldcatalog serve` is the persistent mode the desktop app uses: one JSON
+request per stdin line, one response per line, matched by id.
+
+### Removing originals
+
+Two steps, always, and the first one is a rehearsal:
+
+```bash
+# 1. See exactly what would go, with paths and sizes
 fieldcatalog --library ~/FieldCatalog delete-originals --ids id1,id2 --confirm DELETE_ORIGINALS
 
-# 3) actually unlink originals; previews remain
+# 2. Do it
 fieldcatalog --library ~/FieldCatalog delete-originals --ids id1,id2 --confirm DELETE_ORIGINALS --execute
-
-# keepers already copied to cloud
-fieldcatalog --library ~/FieldCatalog offload-originals --ids id1 --confirm OFFLOAD_ORIGINALS --execute
 ```
 
-Every command prints `{"ok": true|false, ...}`. Tauri should parse stdout JSON only.
+Keepers already copied elsewhere use `offload-originals` with
+`OFFLOAD_ORIGINALS`. Both route through the recycle bin unless `--permanent` is
+passed, back the catalog up first, and append to `audit.jsonl`.
 
-## Desktop (Tauri 2)
+## Rules the app holds itself to
+
+These are safety invariants, not preferences. They are enforced in the worker,
+not just the UI.
+
+1. **Reject is not delete.** A verdict marks a shot; it never removes a file.
+2. **Never invent GPS.** Coordinates come from file EXIF only. A typed place is
+   a label, and it never overwrites coordinates the camera recorded. There is no
+   default location.
+3. **Dry run before execute.** `--execute` is refused without the exact
+   confirmation string, and the UI never offers it without showing the file list
+   first.
+4. **Delete expects `reject`, offload expects `keep`**, overridable only with an
+   explicit `--allow-any-verdict`.
+5. **Previews always survive.** The worker refuses to unlink a preview, a file
+   inside the preview folder, the database, or a missing original.
+6. **Originals stay where they are.** Import copies nothing but a preview;
+   export copies rather than moves.
+7. **The catalog is backed up before every executed removal**, and a failed
+   backup aborts the operation.
+
+## Development
 
 ```bash
-npm install
-npm --prefix ui install
-npm run tauri -- dev
+pytest -q                        # worker tests
+npm --prefix ui run build        # typecheck and build the UI
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Web-only while iterating: `npm --prefix ui run dev` then open http://localhost:1420/ (spawns the same CLI).
+`pytest` sets `pythonpath = ["src"]`, so it runs from the repo root without
+installing. Use the project `.venv` rather than a system Python — the tests
+need `send2trash`.
 
-Library: `%USERPROFILE%\FieldCatalog`. Cull keys default to J/K next-prev, P keep, X reject, U unrated. Reject does not delete. Delete/offload always dry-run, then confirm `DELETE_ORIGINALS` / `OFFLOAD_ORIGINALS`.
+[BACKLOG.md](BACKLOG.md) tracks what is known-broken and known-missing.
+[CLAUDE.md](CLAUDE.md) briefs coding agents on the conventions and invariants.
 
-## Rules the UI must not violate
+## License
 
-- Never call `--execute` without showing `files` from a dry-run first.
-- Confirm strings are exact: `DELETE_ORIGINALS` / `OFFLOAD_ORIGINALS`.
-- Worker refuses to unlink previews, the sqlite file, or a missing original.
-- GPS is file metadata only. No default city.
-
-## Tests
-
-```bash
-pip install -e ".[dev]"
-pytest -q
-```
+MIT — see [LICENSE](LICENSE).

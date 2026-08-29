@@ -349,11 +349,17 @@ mod tests {
         // Concurrent requests must each get their own response.
         let c2 = Arc::clone(&client);
         let handle = thread::spawn(move || {
-            c2.request(&["list".into(), "--summary".into()], Duration::from_secs(30))
-                .expect("threaded list")
+            c2.request(
+                &["list".into(), "--summary".into()],
+                Duration::from_secs(30),
+            )
+            .expect("threaded list")
         });
         let a = client
-            .request(&["list".into(), "--summary".into()], Duration::from_secs(30))
+            .request(
+                &["list".into(), "--summary".into()],
+                Duration::from_secs(30),
+            )
             .expect("list");
         let b = handle.join().expect("join");
         let va: serde_json::Value = serde_json::from_str(&a).unwrap();

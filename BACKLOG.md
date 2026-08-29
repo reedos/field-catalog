@@ -1,4 +1,6 @@
-# Field Catalog Desktop — TODO / Backlog
+# Backlog
+
+Known-broken and known-missing, kept honest. Shipped work moves to Done.
 
 ## High value, pending
 - [ ] Pending-deletes quick view: show count in Toolbar badge, open dry-run dialog directly

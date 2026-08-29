@@ -23,7 +23,7 @@ Library data lives at `~/FieldCatalog/`: `catalog.sqlite`, `previews/{id}.jpg`, 
 pip install -e ".[dev]"                      # ".[raw]" adds rawpy for NEF thumbnails
 npm install && npm --prefix ui install
 npm run tauri -- dev             # full desktop app
-npm --prefix ui run dev          # browser-only, vite plugin bridges to the CLI
+npm --prefix ui run dev          # browser-only (scripts/dev-browser.bat)
 npm --prefix ui run build        # tsc --noEmit && vite build
 ```
 
@@ -42,11 +42,11 @@ its last fallback. The worker exe must be rebuilt whenever the Python changes.
 
 ## Hard rules
 
-These are safety invariants, not style preferences. The README and `AGENT.md` state them too.
+These are safety invariants, not style preferences. The README states them too.
 
 1. **Reject is not delete.** A `reject` verdict marks a shot; it never removes a file.
 2. **Never invent GPS.** Coordinates come from file EXIF only. Place names are labels. There is no
-   default city — and none may be inferred from the user's location.
+   default city, and none may be inferred from the user's location.
 3. **Never call `--execute` without first showing the dry-run `files` list.** Confirmation strings are
    exactly `DELETE_ORIGINALS` and `OFFLOAD_ORIGINALS`.
 4. The worker refuses to unlink previews, the sqlite file, or a missing original. Keep it that way.
@@ -76,7 +76,7 @@ Mirrored in `ui/src/types.ts` — change both.
 
 **Serialization is inconsistent by history:** `tags` is comma-joined, `field_marks` and
 `similar_species` are JSON arrays, `favorite`/`gps_from_file` are ints. Known wart, listed in
-`TODO_UI_POLISH.md`. Don't silently normalize it.
+`BACKLOG.md`. Don't silently normalize it.
 
 **CLI handler pattern:** one `cmd_*` per subcommand, wired via
 `sub.add_parser(...).set_defaults(func=cmd_x)`. Handlers print via `_out()`, which serve mode
@@ -91,18 +91,18 @@ additive via `PRAGMA table_info` checks in `_migrate()`.
 
 **Theme:** `ui/tailwind.config.js` defines the field-journal palette — `ink`, `charcoal`, `bark`,
 `paper`, `paper-dim`, `moss`, `moss-dark`, `ochre`, `reject`, serif-first stack. Deliberately not a
-SaaS dashboard look; see `DESKTOP_PROMPT.md`. Use the tokens, don't hardcode hex.
+SaaS dashboard look. Use the tokens, don't hardcode hex.
 
 ## Before reporting a bug
 
-Check `TODO_UI_POLISH.md` first — it already documents several known issues, including: `find_cli()`
+Check `BACKLOG.md` first — it already documents several known issues, including: `find_cli()`
 bakes in `CARGO_MANIFEST_DIR` so the NSIS bundle only runs on this machine; a forward-button history
 bug; four sources of truth for the animal-type enum; `xai.key` stored plaintext; path-based import
 dedupe orphaning moved originals.
 
 ## Don't
 
-From `AGENT.md`: no deleting on reject, no demosaicing every NEF on import, no putting originals
+No deleting on reject, no demosaicing every NEF on import, no putting originals
 inside the preview folder, no invented GPS, no accounts/social features, no auto-identify on import
 (identify is user-click only), no Electron.
 
