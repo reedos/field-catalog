@@ -452,7 +452,7 @@ def cmd_detect_subjects(ns: argparse.Namespace) -> int:
     if ns.limit:
         todo = todo[: ns.limit]
 
-    done = boxed = scored = failed = 0
+    done = boxed = scored = failed = adrift = 0
     for i, (bid, lead, members) in enumerate(todo, 1):
         print(f"subject {i}/{len(todo)}", file=sys.stderr, flush=True)
         try:
@@ -472,6 +472,13 @@ def cmd_detect_subjects(ns: argparse.Namespace) -> int:
         if box[2] * box[3] > 0.75:
             continue
         boxed += 1
+        # One box reused across a burst assumes the animal stays inside it. When
+        # it does not -- a sea lion swimming out of frame, a bird in flight --
+        # the box ends up on whatever is left there, and water spray scores far
+        # higher than an animal ever does. A region scoring several times the
+        # whole frame is that, not a sharp subject, so the whole burst is left
+        # unscored rather than scored wrongly.
+        measured = []
         for m in members:
             try:
                 sh = score_region(Path(m.preview_path), box)
@@ -479,10 +486,16 @@ def cmd_detect_subjects(ns: argparse.Namespace) -> int:
                 sh = None
             if sh is None:
                 continue
-            cat.update(m.id, subject_box=json.dumps(box), subject_sharpness=sh)
+            measured.append((m.id, sh, m.sharpness or 0.0))
+        drifted = any(sh > 3 * whole for _, sh, whole in measured if whole > 0)
+        if drifted:
+            adrift += 1
+            continue
+        for mid, sh, _ in measured:
+            cat.update(mid, subject_box=json.dumps(box), subject_sharpness=sh)
             scored += 1
     return _out(True, groups=len(todo), detected=done, with_box=boxed,
-                shots_scored=scored, failed=failed)
+                shots_scored=scored, failed=failed, subject_moved=adrift)
 
 
 def cmd_identify_cancel(ns: argparse.Namespace) -> int:
