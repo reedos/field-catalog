@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ANIMAL_TYPES, type AnimalType, type Shot } from "../types";
 import { animalLabel, fmtBytes, fmtDate, fileName, sharpnessMeter, titleCommon, titleScientific } from "../lib/format";
+import { PEAK_STEPS, peakingCanvas } from "../lib/peaking";
 import { previewUrl } from "../lib/preview";
 
 function useFieldMarksSuggestions(all: string[]) {
@@ -61,6 +62,13 @@ export default function Detail(props: {
   // Loupe: 1:1 view with drag-to-pan. Pan resets when the loupe closes or the
   // shot changes, so a new frame always opens centred.
   const loupeBoxRef = useRef<HTMLDivElement>(null);
+  // Focus peaking, drawn over the 1:1 view. The frame's sharpness score says
+  // there are sharp edges; this says where they are, which is the question
+  // when the eye matters and the wing does not.
+  const imgRef = useRef<HTMLImageElement>(null);
+  const peakRef = useRef<HTMLCanvasElement>(null);
+  const [peak, setPeak] = useState(0);
+  const [decoded, setDecoded] = useState(0);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [panning, setPanning] = useState(false);
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -69,6 +77,23 @@ export default function Detail(props: {
     setPan({ x: 0, y: 0 });
     setPanning(false);
   }, [props.loupe, shot.id]);
+
+  // Recomputed only when something it depends on actually changed: this walks
+  // every pixel of the preview twice, which is cheap once and not cheap per
+  // render. `decoded` is bumped by the image's own load event, because there
+  // is nothing to measure until the bitmap exists.
+  useEffect(() => {
+    const dst = peakRef.current;
+    if (!dst) return;
+    if (!props.loupe || !peak) return;
+    const img = imgRef.current;
+    if (!img || !img.complete) return;
+    const edges = peakingCanvas(img, PEAK_STEPS[peak - 1]);
+    if (!edges) return;
+    dst.width = edges.width;
+    dst.height = edges.height;
+    dst.getContext("2d")?.drawImage(edges, 0, 0);
+  }, [props.loupe, peak, shot.id, decoded]);
 
   function onLoupeDown(e: ReactPointerEvent<HTMLDivElement>) {
     if (!props.loupe) return;
@@ -166,7 +191,9 @@ export default function Detail(props: {
       >
         {src ? (
           <img
+            ref={imgRef}
             src={src}
+            onLoad={() => setDecoded((n) => n + 1)}
             alt={shot.common_name || fileName(shot.original_path)}
             draggable={false}
             className={props.loupe ? "max-w-none select-none" : "max-h-full max-w-full object-contain"}
@@ -178,9 +205,34 @@ export default function Detail(props: {
             }}
           />
         ) : null}
+        {/*
+          Positioned rather than laid out: the base image is flex-centred at
+          natural size, and centring on the container plus the same pan puts
+          this exactly over it.
+        */}
+        <canvas
+          ref={peakRef}
+          aria-hidden
+          className={`pointer-events-none absolute max-w-none ${
+            props.loupe && peak ? "" : "hidden"
+          }`}
+          style={{
+            left: "50%",
+            top: "50%",
+            transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px)`,
+          }}
+        />
         {props.loupe ? (
-          <div className="absolute top-2 left-2 bg-ink/80 text-paper-dim text-[11px] px-2 py-0.5 border border-bark pointer-events-none">
-            1:1 — drag to pan, L to exit
+          <div className="absolute top-2 left-2 flex items-center gap-2 border border-bark bg-ink/80 px-2 py-0.5 text-[11px] text-paper-dim">
+            <span className="pointer-events-none">1:1 — drag to pan, L to exit</span>
+            <button
+              type="button"
+              onClick={() => setPeak((v) => (v + 1) % (PEAK_STEPS.length + 1))}
+              className={`transition-colors ${peak ? "text-ochre" : "hover:text-paper"}`}
+              title="Mark the pixels sitting on a sharp edge. Peaking follows contrast, so a smooth subject shows less than a textured one — step up when it does."
+            >
+              {["Focus", "Focus ·", "Focus ··"][peak]}
+            </button>
           </div>
         ) : null}
       </div>
