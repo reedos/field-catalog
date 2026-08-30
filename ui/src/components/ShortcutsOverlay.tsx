@@ -23,6 +23,10 @@ const VIEW_HINTS: Record<View, { action: string; hint: string }[]> = {
     { action: "Search species", hint: "/" },
     { action: "Open library", hint: "Enter" },
   ],
+  guide: [
+    { action: "Read", hint: "scroll" },
+    { action: "Back to the library", hint: "Library tab" },
+  ],
   settings: [
     { action: "Save changes", hint: "Enter" },
     { action: "Close", hint: "Escape" },

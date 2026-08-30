@@ -2,7 +2,7 @@ export type AnimalType = "bird" | "mammal" | "herp" | "fish" | "invertebrate" | 
 export type Verdict = "keep" | "reject" | "unrated";
 export type OriginalStatus = "present" | "deleted" | "offloaded";
 export type ColorLabel = "red" | "yellow" | "green" | "blue" | "purple";
-export type View = "library" | "map" | "bursts" | "life" | "settings";
+export type View = "library" | "map" | "bursts" | "life" | "guide" | "settings";
 export type SortKey = "captured_at" | "created_at" | "stars" | "sharpness" | "species" | "location";
 
 export type ViewState = {

@@ -8,6 +8,7 @@ import Detail from "./components/Detail";
 import DiskDialog from "./components/DiskDialog";
 import Filters from "./components/Filters";
 import Grid, { type BurstMeta } from "./components/Grid";
+import Guide from "./components/Guide";
 import LifeList from "./components/LifeList";
 import MapView from "./components/MapView";
 import Settings from "./components/Settings";
@@ -865,6 +866,7 @@ const verdicts = useMemo(() => {
             }}
           />
         ) : null}
+        {view === "guide" ? <Guide keys={keys} /> : null}
         {view === "settings" ? (
           <Settings
             keys={keys}
