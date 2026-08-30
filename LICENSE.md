@@ -6,7 +6,7 @@ FSL-1.1-MIT
 
 ## Notice
 
-Copyright 2026 Reed
+Copyright 2026 Reed Cameron Osaki
 
 ## Terms and Conditions
 
