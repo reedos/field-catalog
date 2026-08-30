@@ -569,6 +569,12 @@ export default function App() {
       } else if (matches(e, keys.color)) {
         e.preventDefault();
         void cycleColor(id);
+      } else if (bare && /^[0-5]$/.test(e.key)) {
+        // Lightroom's rating keys. Rating is the other half of culling, and it
+        // was the only part of it that still needed the mouse. Placed after the
+        // rebindable keys so binding a cull key to a digit still wins.
+        e.preventDefault();
+        void setStars(id, Number(e.key));
       } else if (matches(e, keys.loupe)) {
         e.preventDefault();
         if (!detail) setDetail(true);

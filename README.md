@@ -26,9 +26,9 @@ separate, deliberate act behind a dry run and an exact confirmation string.
   preview enters the library. RAW files use the embedded JPEG; nothing is
   demosaiced.
 - **Cull** with the keyboard, the way Lightroom does it: arrow keys to walk,
-  `p` keep, `x` reject, `u` unrate, `f` favourite, `c` colour label, `l` for a
-  1:1 loupe, `/` to search, `Ctrl+Z` to undo. `j`/`k` work too. Every cull key
-  is rebindable in Settings.
+  `p` keep, `x` reject, `u` unrate, `1`-`5` to rate and `0` to clear, `f`
+  favourite, `c` colour label, `l` for a 1:1 loupe, `/` to search, `Ctrl+Z` to
+  undo. `j`/`k` work too. Every cull key is rebindable in Settings.
 - **Compare** a burst: every frame on screen at once with pan and zoom synced
   across them. Mark frames one at a time, or mark the keepers and reject the
   rest in a stroke, or flag only the duds and keep the rest.

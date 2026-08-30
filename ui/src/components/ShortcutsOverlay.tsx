@@ -47,6 +47,7 @@ export default function ShortcutsOverlay({ keys, view, onClose }: { keys: Keymap
             ["Keep", keys.keep],
             ["Reject", keys.reject],
             ["Unrated", keys.unrated],
+            ["Stars", "1-5 (0 clears)"],
             ["Favorite", keys.favorite],
             ["Color", keys.color],
             ["Loupe", keys.loupe],
