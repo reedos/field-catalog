@@ -48,6 +48,14 @@ body {
   .fc-ghost {
     @apply border-transparent text-paper-dim hover:text-paper hover:bg-bark/50;
   }
+  /*
+   * For a control floating over map tiles rather than over one of the app's
+   * own surfaces. The ground underneath is light or dark depending on the
+   * basemap, so this one brings its own instead of borrowing.
+   */
+  .fc-over-map {
+    @apply border-bark bg-charcoal/95 text-paper shadow-md shadow-ink/50 hover:bg-bark hover:text-paper;
+  }
 
   .fc-input {
     @apply bg-charcoal border border-bark rounded-md px-2.5 py-1.5 text-sm outline-none transition-colors duration-150 placeholder:text-paper-dim/60;
@@ -138,7 +146,7 @@ button {
  * to monochrome looks better still until you meet a coastline -- land and
  * water collapse to the same value. This is the point before that.
  */
-.leaflet-container.fc-map-dark {
+.fc-map-dark .leaflet-container {
   background: #1a2318;
 }
 
@@ -146,23 +154,22 @@ button {
   filter: invert(1) hue-rotate(180deg) brightness(0.82) contrast(0.9) saturate(0.32) sepia(0.45);
 }
 
-.leaflet-container.fc-map-light {
+.fc-map-light .leaflet-container {
   background: #c9cfc1;
 }
 
 /*
  * Leaflet's own chrome is white whichever basemap is showing. The app is not,
  * so bring the popups, controls and attribution into the palette.
+ *
+ * The popup belongs to the map it is pinned on rather than to the app, so it
+ * takes the basemap's ground and its text colour. Everything inside inherits,
+ * which is why the cards in MapView.tsx set no colours of their own -- they
+ * were written for Leaflet's white default, and hardcoding ink there is what
+ * made them unreadable the moment the surface underneath went dark.
  */
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
-  background: #241f1a;
-  color: #efe6d6;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-}
-
 .leaflet-popup-content-wrapper {
-  border: 1px solid #3a3228;
+  border: 1px solid;
   border-radius: 4px;
 }
 
@@ -170,13 +177,72 @@ button {
   margin: 10px 12px;
 }
 
-.leaflet-container a.leaflet-popup-close-button {
-  color: #d9cdb8;
-}
-
 .leaflet-container a.leaflet-popup-close-button:hover {
   color: #c4a36a;
   background: transparent;
+}
+
+.fc-map-dark .leaflet-popup-content-wrapper,
+.fc-map-dark .leaflet-popup-tip {
+  background: #241f1a;
+  color: #efe6d6;
+}
+
+.fc-map-dark .leaflet-popup-content-wrapper {
+  border-color: rgba(196, 163, 106, 0.45);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6);
+}
+
+.fc-map-dark .leaflet-container a.leaflet-popup-close-button {
+  color: #d9cdb8;
+}
+
+.fc-map-light .leaflet-popup-content-wrapper,
+.fc-map-light .leaflet-popup-tip {
+  background: #efe6d6;
+  color: #161410;
+}
+
+.fc-map-light .leaflet-popup-content-wrapper {
+  border-color: #3a3228;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+
+.fc-map-light .leaflet-container a.leaflet-popup-close-button {
+  color: #3a3228;
+}
+
+/* Secondary text, hover and inputs inside a popup, in whichever mode. */
+.fc-map-dark .fc-pop-muted {
+  color: rgba(217, 205, 184, 0.7);
+}
+
+.fc-map-light .fc-pop-muted {
+  color: #5c5548;
+}
+
+.fc-map-dark .fc-pop-row:hover {
+  background: rgba(239, 230, 214, 0.09);
+}
+
+.fc-map-light .fc-pop-row:hover {
+  background: rgba(22, 20, 16, 0.06);
+}
+
+.fc-pop-input {
+  border: 1px solid;
+  border-radius: 3px;
+  color: inherit;
+}
+
+.fc-map-dark .fc-pop-input {
+  border-color: #3a3228;
+  background: #161410;
+}
+
+.fc-map-light .fc-pop-input {
+  border-color: #b3a894;
+  background: #f7f2e8;
 }
 
 .leaflet-bar a,

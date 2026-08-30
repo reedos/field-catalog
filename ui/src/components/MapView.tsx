@@ -100,11 +100,15 @@ export default function MapView(props: {
   }, [pins]);
 
   return (
-    <div className="h-full relative">
+    // The mode class rides the wrapper, not the MapContainer: react-leaflet
+    // freezes className at mount (const [props] = useState({className})), so a
+    // class set there never changes and the toggle only appeared to work when
+    // leaving the view remounted the map.
+    <div className={`h-full relative ${dark ? "fc-map-dark" : "fc-map-light"}`}>
       <button
         type="button"
         onClick={() => setDark((d) => !d)}
-        className="fc-btn fc-ghost absolute right-3 top-3 z-[1000]"
+        className="fc-btn fc-over-map absolute right-3 top-3 z-[1200]"
         title={dark ? "Show the map as drawn, for reading terrain" : "Dim the map back into the journal"}
       >
         {dark ? "Light map" : "Dark map"}
@@ -112,7 +116,7 @@ export default function MapView(props: {
       <MapContainer
         center={[20, 0]}
         zoom={2}
-        className={`h-full w-full ${dark ? "fc-map-dark" : "fc-map-light"}`}
+        className="h-full w-full"
         worldCopyJump
       >
         <TileLayer
@@ -154,7 +158,7 @@ function SpeciesList(props: { shots: Shot[]; onOpen: (id: string) => void }) {
   const rows = useMemo(() => speciesAt(props.shots), [props.shots]);
   const shown = rows.slice(0, 8);
   return (
-    <div className="w-56 font-sans text-ink">
+    <div className="w-56 font-sans">
       <div className="mb-2 text-xs">
         {rows.length} species · {props.shots.length} shots here
       </div>
@@ -164,7 +168,7 @@ function SpeciesList(props: { shots: Shot[]; onOpen: (id: string) => void }) {
             key={r.key}
             type="button"
             onClick={() => props.onOpen(r.best.id)}
-            className="flex items-center gap-2 rounded-sm p-0.5 text-left text-xs hover:bg-black/5"
+            className="fc-pop-row flex items-center gap-2 rounded-sm p-0.5 text-left text-xs"
             title={`Open the best frame of ${r.name}`}
           >
             <img
@@ -173,12 +177,12 @@ function SpeciesList(props: { shots: Shot[]; onOpen: (id: string) => void }) {
               className="h-8 w-8 shrink-0 rounded-sm object-cover"
             />
             <span className="min-w-0 flex-1 truncate underline">{r.name}</span>
-            {r.count > 1 ? <span className="shrink-0 text-neutral-500">{r.count}</span> : null}
+            {r.count > 1 ? <span className="fc-pop-muted shrink-0">{r.count}</span> : null}
           </button>
         ))}
       </div>
       {rows.length > shown.length ? (
-        <div className="mt-1.5 text-[11px] text-neutral-600">
+        <div className="fc-pop-muted mt-1.5 text-[11px]">
           and {rows.length - shown.length} more species
         </div>
       ) : null}
@@ -208,7 +212,7 @@ function PinCard(props: {
   useEffect(() => setLabel(props.shot.location || ""), [props.shot.id, props.shot.location]);
   const src = previewUrl(props.shot.preview_path);
   return (
-    <div className="w-48 font-sans text-ink">
+    <div className="w-48 font-sans">
       {src ? (
         <img
           src={src}
@@ -217,7 +221,7 @@ function PinCard(props: {
         />
       ) : null}
       <input
-        className="w-full border px-1 py-0.5 text-xs mb-1"
+        className="fc-pop-input w-full px-1 py-0.5 text-xs mb-1"
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         onBlur={() => {
@@ -226,7 +230,7 @@ function PinCard(props: {
         placeholder="Place name"
         aria-label="Place name"
       />
-      <div className="text-[10px] text-neutral-600 mb-1">
+      <div className="fc-pop-muted text-[10px] mb-1">
         {(props.shot.lat as number).toFixed(5)}, {(props.shot.lon as number).toFixed(5)} file GPS
       </div>
       <button className="text-xs underline" onClick={() => props.onOpen(props.shot.id)}>
