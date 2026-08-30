@@ -1,7 +1,7 @@
 [project]
 name = "fieldcatalog-worker"
-version = "0.2.1"
-description = "Field Catalog local worker ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â previews, cull, disk delete/offload"
+version = "0.2.2"
+description = "Field Catalog local worker ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â previews, cull, disk delete/offload"
 readme = "README.md"
 license = { file = "LICENSE.md" }
 requires-python = ">=3.10"
