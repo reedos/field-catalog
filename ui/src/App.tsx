@@ -548,10 +548,10 @@ export default function App() {
         return;
       }
       const bare = !e.ctrlKey && !e.metaKey && !e.altKey;
-      if (matches(e, keys.next) || (bare && (e.key === "ArrowRight" || e.key === "ArrowDown"))) {
+      if (matches(e, keys.next) || (bare && (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "j"))) {
         e.preventDefault();
         move(1);
-      } else if (matches(e, keys.prev) || (bare && (e.key === "ArrowLeft" || e.key === "ArrowUp"))) {
+      } else if (matches(e, keys.prev) || (bare && (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "k"))) {
         e.preventDefault();
         move(-1);
       } else if (matches(e, keys.keep)) {

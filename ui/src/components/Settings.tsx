@@ -1,3 +1,4 @@
+import { keyLabel } from "../lib/keys";
 import { DEFAULT_KEYS, type Keymap } from "../types";
 import { useState } from "react";
 
@@ -50,7 +51,7 @@ export default function Settings(props: {
             <span>{row.label}</span>
             <input
               readOnly
-              value={props.keys[row.key]}
+              value={keyLabel(props.keys[row.key])}
               className="w-28 bg-charcoal border border-bark px-2 py-1 font-sans text-center"
               onKeyDown={(e) => {
                 e.preventDefault();

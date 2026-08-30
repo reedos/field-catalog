@@ -113,8 +113,8 @@ export interface Keymap {
 }
 
 export const DEFAULT_KEYS: Keymap = {
-  next: "j",
-  prev: "k",
+  next: "ArrowRight",
+  prev: "ArrowLeft",
   keep: "p",
   reject: "x",
   unrated: "u",

@@ -16,6 +16,23 @@ export function saveKeys(keys: Keymap): void {
   localStorage.setItem(STORAGE, JSON.stringify(keys));
 }
 
+/**
+ * What to print on a key cap. Arrow keys are named "ArrowRight" in the DOM and
+ * nobody has that written on their keyboard.
+ */
+const LABELS: Record<string, string> = {
+  ArrowRight: "→",
+  ArrowLeft: "←",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  Escape: "Esc",
+  " ": "Space",
+};
+
+export function keyLabel(k: string): string {
+  return LABELS[k] ?? k;
+}
+
 export function eventKey(e: KeyboardEvent): string {
   if (e.key === "Escape" || e.key === "/" || e.key.length > 1) return e.key;
   return e.key.toLowerCase();

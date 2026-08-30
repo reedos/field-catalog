@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Keymap, Shot, Verdict } from "../types";
 import { focusScore } from "../lib/format";
-import { matches } from "../lib/keys";
+import { keyLabel, matches } from "../lib/keys";
 import { previewUrl } from "../lib/preview";
 
 /**
@@ -133,10 +133,10 @@ export default function CompareView(props: {
       return;
     }
     const bare = !e.ctrlKey && !e.metaKey && !e.altKey;
-    if (matches(e, props.keys.next) || (bare && (e.key === "ArrowRight" || e.key === "ArrowDown"))) {
+    if (matches(e, props.keys.next) || (bare && (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "j"))) {
       e.preventDefault();
       moveFocus(1);
-    } else if (matches(e, props.keys.prev) || (bare && (e.key === "ArrowLeft" || e.key === "ArrowUp"))) {
+    } else if (matches(e, props.keys.prev) || (bare && (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "k"))) {
       e.preventDefault();
       moveFocus(-1);
     } else if (matches(e, props.keys.reject)) {
@@ -221,7 +221,7 @@ export default function CompareView(props: {
             type="button"
             onClick={() => setZoom((z) => (z === "fit" ? "1:1" : "fit"))}
             className={`fc-btn ${zoom === "1:1" ? "fc-warn" : "fc-ghost"}`}
-            title={`Toggle 1:1 (${props.keys.loupe})`}
+            title={`Toggle 1:1 (${keyLabel(props.keys.loupe)})`}
           >
             {zoom === "1:1" ? "1:1 — drag pans all" : "Fit"}
           </button>
@@ -360,7 +360,7 @@ export default function CompareView(props: {
                       type="button"
                       onClick={() => mark(shot, "keep", false)}
                       className={`transition-colors ${isKeep ? "text-moss" : "hover:text-moss"}`}
-                      title={isKeep ? "Take the keep back off" : `Mark this frame keep (${props.keys.keep})`}
+                      title={isKeep ? "Take the keep back off" : `Mark this frame keep (${keyLabel(props.keys.keep)})`}
                     >
                       Keep
                     </button>
@@ -369,7 +369,7 @@ export default function CompareView(props: {
                       type="button"
                       onClick={() => mark(shot, "reject", false)}
                       className={`transition-colors ${isReject ? "text-reject" : "hover:text-reject"}`}
-                      title={isReject ? "Take the reject back off" : `Mark this frame reject (${props.keys.reject})`}
+                      title={isReject ? "Take the reject back off" : `Mark this frame reject (${keyLabel(props.keys.reject)})`}
                     >
                       {isReject ? "Restore" : "Reject"}
                     </button>
@@ -389,11 +389,11 @@ export default function CompareView(props: {
       )}
 
       <div className="flex items-center gap-4 border-t border-bark bg-charcoal/60 px-4 py-1.5 text-xs text-paper-dim">
-        <span><kbd className="fc-kbd">{props.keys.next}</kbd>/<kbd className="fc-kbd">{props.keys.prev}</kbd> focus</span>
-        <span><kbd className="fc-kbd">{props.keys.reject}</kbd> reject &amp; on</span>
-        <span><kbd className="fc-kbd">{props.keys.keep}</kbd> keep &amp; on</span>
-        <span><kbd className="fc-kbd">{props.keys.unrated}</kbd> undo reject</span>
-        <span><kbd className="fc-kbd">{props.keys.loupe}</kbd> 1:1</span>
+        <span><kbd className="fc-kbd">{keyLabel(props.keys.next)}</kbd>/<kbd className="fc-kbd">{keyLabel(props.keys.prev)}</kbd> focus</span>
+        <span><kbd className="fc-kbd">{keyLabel(props.keys.reject)}</kbd> reject &amp; on</span>
+        <span><kbd className="fc-kbd">{keyLabel(props.keys.keep)}</kbd> keep &amp; on</span>
+        <span><kbd className="fc-kbd">{keyLabel(props.keys.unrated)}</kbd> undo reject</span>
+        <span><kbd className="fc-kbd">{keyLabel(props.keys.loupe)}</kbd> 1:1</span>
         <span>
           <kbd className="fc-kbd">Enter</kbd>{" "}
           {kept.length ? "reject the rest" : "keep focused · reject rest"}

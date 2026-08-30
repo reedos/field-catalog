@@ -1,10 +1,11 @@
 import { Fragment } from "react";
 import { useModalDialog } from "../hooks/useModalDialog";
+import { keyLabel } from "../lib/keys";
 import type { Keymap, View } from "../types";
 
 const VIEW_HINTS: Record<View, { action: string; hint: string }[]> = {
   library: [
-    { action: "Navigate", hint: "j/k or ↑/↓" },
+    { action: "Navigate", hint: "arrow keys (or j/k)" },
     { action: "Open detail", hint: "Enter or click" },
     { action: "Toggle loupe", hint: "l" },
     { action: "Compare burst", hint: "COMPARE on a burst cell" },
@@ -56,7 +57,7 @@ export default function ShortcutsOverlay({ keys, view, onClose }: { keys: Keymap
           ].map(([a, k]) => (
             <Fragment key={String(a)}>
               <div className="text-bark/80">{a}</div>
-              <div className="font-mono">{String(k)}</div>
+              <div className="font-mono">{keyLabel(String(k))}</div>
             </Fragment>
           ))}
         </div>
