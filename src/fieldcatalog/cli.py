@@ -384,19 +384,105 @@ def cmd_identify(ns: argparse.Namespace) -> int:
         if subject_sharpness is None:
             box = None
 
-    updated = cat.update(
-        ns.id,
-        common_name=title_common(result["common_name"]),
-        scientific_name=title_scientific(result["scientific_name"]),
-        animal_type=result["animal_type"],
-        confidence=result["confidence"],
-        field_marks=json.dumps(result["field_marks"]),
-        similar_species=json.dumps(result["similar_species"]),
-        notes=result["notes"],
-        subject_box=json.dumps(box) if box else None,
-        subject_sharpness=subject_sharpness,
-    )
+    fields = {
+        "subject_box": json.dumps(box) if box else None,
+        "subject_sharpness": subject_sharpness,
+    }
+    # --subject-only exists so a library whose names were curated by hand can
+    # gain subject boxes without handing every species back to the model.
+    if not getattr(ns, "subject_only", False):
+        fields.update(
+            common_name=title_common(result["common_name"]),
+            scientific_name=title_scientific(result["scientific_name"]),
+            animal_type=result["animal_type"],
+            confidence=result["confidence"],
+            field_marks=json.dumps(result["field_marks"]),
+            similar_species=json.dumps(result["similar_species"]),
+            notes=result["notes"],
+        )
+    updated = cat.update(ns.id, **fields)
     return _out(True, shot=shot_json(updated) if updated else shot_json(shot))
+
+
+# Names that mean "there is nothing here to locate".
+NO_SUBJECT = {"no animal identifiable", "no animal visible", "unidentifiable",
+              "unidentified seabird", "unknown"}
+
+
+def _pad_box(box: list[float], grow: float = 0.2) -> list[float]:
+    """Grow a box outward, clamped to the frame.
+
+    One detection is reused across a whole burst, and the animal does not hold
+    still for it -- framing is shared between burst frames, the subject inside
+    that framing is not. Padding trades tightness for still containing the
+    animal on the last frame, which is the trade worth making: a loose box
+    around the bird beats a tight box around where the bird used to be.
+    """
+    x, y, w, h = box
+    dx, dy = w * grow / 2, h * grow / 2
+    nx, ny = max(0.0, x - dx), max(0.0, y - dy)
+    return [round(nx, 4), round(ny, 4),
+            round(min(w + 2 * dx, 1.0 - nx), 4), round(min(h + 2 * dy, 1.0 - ny), 4)]
+
+
+def cmd_detect_subjects(ns: argparse.Namespace) -> int:
+    """Locate the animal once per burst, and score every frame on that region.
+
+    Detecting per shot would be twelve times the model calls for a worse
+    answer: each frame would get its own slightly different box, so the scores
+    would not be comparable -- and comparing frames of one burst is the whole
+    reason to want them.
+    """
+    from .bursts import burst_pick, grouped
+    from .sharpness import score_region
+    from .vision import IdentifyError, identify_preview
+
+    cat = _catalog(ns)
+    groups = grouped(cat.list())
+    todo: list[tuple[str, object, list]] = []
+    for bid, members in groups.items():
+        named = [m for m in members if (m.common_name or "").strip().lower() not in NO_SUBJECT
+                 and (m.common_name or "").strip()]
+        if not named:
+            continue
+        if not ns.redo and all(m.subject_box for m in named):
+            continue
+        lead = burst_pick(named) or named[0]
+        todo.append((bid, lead, named))
+    if ns.limit:
+        todo = todo[: ns.limit]
+
+    done = boxed = scored = failed = 0
+    for i, (bid, lead, members) in enumerate(todo, 1):
+        print(f"subject {i}/{len(todo)}", file=sys.stderr, flush=True)
+        try:
+            res = identify_preview(lead.preview_path, library=cat.library)
+        except IdentifyError:
+            failed += 1
+            continue
+        box = res.get("subject_box")
+        done += 1
+        if not box:
+            continue
+        box = _pad_box(box, ns.pad)
+        # After padding a box can cover most of the frame, at which point
+        # "sharpness on the animal" is just the whole-frame score wearing a
+        # different label. Storing that would be worse than storing nothing,
+        # because the panel would present it as the more specific number.
+        if box[2] * box[3] > 0.75:
+            continue
+        boxed += 1
+        for m in members:
+            try:
+                sh = score_region(Path(m.preview_path), box)
+            except OSError:
+                sh = None
+            if sh is None:
+                continue
+            cat.update(m.id, subject_box=json.dumps(box), subject_sharpness=sh)
+            scored += 1
+    return _out(True, groups=len(todo), detected=done, with_box=boxed,
+                shots_scored=scored, failed=failed)
 
 
 def cmd_identify_cancel(ns: argparse.Namespace) -> int:
@@ -642,7 +728,22 @@ def build_parser() -> argparse.ArgumentParser:
         dest="animal_type",
         choices=["bird", "mammal", "herp", "fish", "invertebrate", "other"],
     )
+    ident.add_argument(
+        "--subject-only",
+        dest="subject_only",
+        action="store_true",
+        help="write only the subject box and its sharpness; leave the identity alone",
+    )
     ident.set_defaults(func=cmd_identify)
+
+    ds = sub.add_parser(
+        "detect-subjects",
+        help="locate the animal once per burst and score every frame on that region",
+    )
+    ds.add_argument("--limit", type=int, default=0, help="stop after this many bursts")
+    ds.add_argument("--pad", type=float, default=0.2, help="grow each box by this fraction")
+    ds.add_argument("--redo", action="store_true", help="include bursts that already have boxes")
+    ds.set_defaults(func=cmd_detect_subjects)
 
     sk = sub.add_parser("set-key", help="save XAI_API_KEY into the library folder (not the repo)")
     sk.add_argument("--value", required=True)
@@ -736,7 +837,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 # Commands that can run for minutes. They get their own lane so a verdict typed
 # mid-import answers immediately instead of queueing behind it.
-SLOW_COMMANDS = {"identify", "import", "refresh-previews", "backfill-dimensions", "doctor", "export-originals"}
+SLOW_COMMANDS = {"identify", "import", "refresh-previews", "backfill-dimensions", "doctor",
+                 "export-originals", "detect-subjects"}
 
 
 def serve_loop(library: str, stdin, stdout) -> None:

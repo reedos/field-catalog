@@ -379,7 +379,10 @@ def _subject_box(raw: object) -> list[float] | None:
         return None
     if x + w > 1.001 or y + h > 1.001:
         return None
-    if w * h > 0.9:
+    # A box over most of the frame is not a location, it is a shrug. The cap
+    # is 0.7 because a real subject filling more than that leaves nothing to
+    # exclude, which is the entire point of measuring inside it.
+    if w * h >= 0.7:
         return None
     return [round(x, 4), round(y, 4), round(min(w, 1.0 - x), 4), round(min(h, 1.0 - y), 4)]
 
