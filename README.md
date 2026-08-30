@@ -110,7 +110,7 @@ it up rather than an answer.
 ## Install
 
 Download **`Field-Catalog-x.y.z-x64-setup.exe`** from the
-[latest release](https://github.com/reedos/field-catalog-worker/releases/latest) and run it.
+[latest release](https://github.com/reedos/field-catalog/releases/latest) and run it.
 The Python worker is bundled, so nothing else needs installing.
 
 Windows will warn that the installer is unsigned — **More info → Run anyway**.
@@ -129,8 +129,8 @@ key. See [Identification](#identification); it is optional.
 Needs Python 3.10+, Node 20+ and Rust.
 
 ```bash
-git clone https://github.com/reedos/field-catalog-worker.git
-cd field-catalog-worker
+git clone https://github.com/reedos/field-catalog.git
+cd field-catalog
 python -m venv .venv
 .venv/Scripts/activate          # Unix: source .venv/bin/activate
 pip install -e ".[dev]"         # ".[raw]" adds rawpy for NEF thumbnails
