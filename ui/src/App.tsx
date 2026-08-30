@@ -38,6 +38,10 @@ import {
 export default function App() {
   const [ready, setReady] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Plate order, as the life list currently shows it. Kept here so the panel's
+  // next/previous follows the plates on screen instead of the library behind
+  // them. Same contents means same array, so this cannot loop.
+  const [lifePlateIds, setLifePlateIds] = useState<string[]>([]);
   const [detail, setDetail] = useState(false);
   const [loupe, setLoupe] = useState(false);
   const [view, setView] = useState<View>("library");
@@ -257,7 +261,11 @@ export default function App() {
     setCompareBurstId(burstId);
   }
 
-  const navList = burstReviewId ? burstMembers : filtered;
+  const lifePlates = useMemo(
+    () => lifePlateIds.map((id) => shotsById.get(id)).filter((s): s is Shot => !!s),
+    [lifePlateIds, shotsById],
+  );
+  const navList = burstReviewId ? burstMembers : view === "life" ? lifePlates : filtered;
   const selectedIndex = navList.findIndex((s) => s.id === selectedId);
 
   // Warm the next frames while this one is being judged -- image decode is the
@@ -753,11 +761,11 @@ const verdicts = useMemo(() => {
         {view === "life" ? (
           <LifeList
             shots={shots}
+            selectedId={selectedId}
+            onPlates={setLifePlateIds}
             onOpenShot={(id) => {
               setSelectedId(id);
-              setView("library");
               setDetail(true);
-              nav.record({ view: "library" });
             }}
             onPick={(id, clear) => {
               void (async () => {

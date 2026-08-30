@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Shot } from "../types";
 import { animalLabel, fmtDay } from "../lib/format";
 import { previewUrl } from "../lib/preview";
@@ -26,13 +26,19 @@ type Species = {
  * The automatic ranking is a starting point, not a verdict. Sharpness is a
  * weak proxy for a good photograph, so every plate can be overruled: choose
  * the frame, correct the name, or drop the species off the list entirely.
+ *
+ * Clicking a plate opens that frame in the side panel without leaving the
+ * list, so a run of corrections stays in one place. The species name is the
+ * way out to the library, where every shot of it is waiting.
  */
 export default function LifeList(props: {
   shots: Shot[];
+  selectedId: string | null;
   onOpenSpecies: (name: string) => void;
   onOpenShot: (id: string) => void;
   onPick: (id: string, clear?: boolean) => void;
   onClearSpecies: (key: string, common: string) => void;
+  onPlates: (ids: string[]) => void;
 }) {
   const [picking, setPicking] = useState<string | null>(null);
 
@@ -91,6 +97,24 @@ export default function LifeList(props: {
     return { all, plateNo };
   }, [props.shots]);
 
+  // The panel's next/previous should follow what is on screen. Hand the
+  // parent the plate order so its keyboard nav walks species here rather
+  // than the library list behind this view.
+  const plateIds = useMemo(() => species.all.map((sp) => sp.best.id), [species]);
+  const { onPlates } = props;
+  useEffect(() => { onPlates(plateIds); }, [plateIds, onPlates]);
+
+  // Keyboard nav can move the selection to a plate that is scrolled off.
+  // Keyed on the selection alone, so clicking a plate you can already see
+  // does not move the page under you.
+  const gridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!props.selectedId) return;
+    gridRef.current
+      ?.querySelector(`[data-plate="${props.selectedId}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [props.selectedId]);
+
   const typeCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const sp of species.all) {
@@ -125,6 +149,7 @@ export default function LifeList(props: {
       </div>
 
       <div
+        ref={gridRef}
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
@@ -134,13 +159,16 @@ export default function LifeList(props: {
         {species.all.map((sp) => {
           const src = previewUrl(sp.best.preview_path);
           const open = picking === sp.key;
+          const showing = props.selectedId === sp.best.id;
           return (
-            <div key={sp.key} className="group flex flex-col gap-2.5">
+            <div key={sp.key} data-plate={sp.best.id} className="group flex flex-col gap-2.5">
               <button
                 type="button"
-                onClick={() => props.onOpenSpecies(sp.common)}
-                className="border border-bark bg-charcoal p-1.5 text-left transition-colors duration-150 group-hover:border-ochre/70"
-                title={`Open ${sp.common} in the library`}
+                onClick={() => props.onOpenShot(sp.best.id)}
+                className={`border bg-charcoal p-1.5 text-left transition-colors duration-150 ${
+                  showing ? "border-ochre" : "border-bark group-hover:border-ochre/70"
+                }`}
+                title={`Open this frame of ${sp.common} in the panel`}
               >
                 <div className="relative aspect-[3/2] overflow-hidden bg-ink">
                   {src ? (
@@ -169,7 +197,14 @@ export default function LifeList(props: {
                   Pl.&nbsp;{species.plateNo.get(sp.key)}
                   {sp.firstSeen ? <span className="text-paper-dim/70"> · first seen {fmtDay(sp.firstSeen)}</span> : null}
                 </div>
-                <div className="font-serif text-lg text-paper">{sp.common}</div>
+                <button
+                  type="button"
+                  onClick={() => props.onOpenSpecies(sp.common)}
+                  className="font-serif text-lg text-paper transition-colors hover:text-ochre"
+                  title={`Show every shot of ${sp.common} in the library`}
+                >
+                  {sp.common}
+                </button>
                 <div className="text-xs italic text-paper-dim">
                   {sp.scientific || " "}
                   <span className="not-italic">
@@ -191,15 +226,6 @@ export default function LifeList(props: {
                   onClick={() => setPicking(open ? null : sp.key)}
                 >
                   {open ? "Done" : "Change photo"}
-                </button>
-                <span className="text-bark">·</span>
-                <button
-                  type="button"
-                  className="text-paper-dim transition-colors hover:text-moss"
-                  onClick={() => props.onOpenShot(sp.best.id)}
-                  title="Open this frame to correct its name"
-                >
-                  Fix name
                 </button>
                 <span className="text-bark">·</span>
                 <button
