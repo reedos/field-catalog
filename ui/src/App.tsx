@@ -933,7 +933,7 @@ const verdicts = useMemo(() => {
             ? `Burst ${selectedIndex + 1}/${burstMembers.length} · Esc library`
             : pickedIds.size
               ? `${pickedIds.size} picked · Identify series`
-              : "Ctrl+click pick · Identify series · J/K cull"}
+              : "Ctrl+click pick · Identify series · ←/→ cull"}
         </span>
       </footer>
       {showBulkLocation && (
