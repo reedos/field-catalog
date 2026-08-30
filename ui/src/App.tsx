@@ -869,6 +869,8 @@ const verdicts = useMemo(() => {
         {view === "guide" ? <Guide keys={keys} /> : null}
         {view === "settings" ? (
           <Settings
+            subjectsMissing={shots.filter((s) => s.common_name && !s.subject_box).length}
+            onFindSubjects={() => void identify.runIdentifySeries(shots, new Set(), "subjects")}
             keys={keys}
             onKeys={persistKeys}
             cli={paths.cli}

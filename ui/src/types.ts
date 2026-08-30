@@ -28,6 +28,9 @@ export interface Shot {
   lat: number | null;
   lon: number | null;
   sharpness: number | null;
+  /** [x, y, w, h] as fractions of the preview; null when not detected. */
+  subject_box: number[] | null;
+  subject_sharpness: number | null;
   quality: number | null;
   burst_id: string;
   common_name: string | null;

@@ -30,6 +30,9 @@ export default function Settings(props: {
   onBackend: (v: "ollama" | "xai") => void;
   onOllamaModel: (v: string) => void;
   onSaveIdentify: () => void;
+  /** How many identified shots in the library still have no subject box. */
+  subjectsMissing: number;
+  onFindSubjects: () => void;
   onRefresh: () => void;
   onMassLocation?: (date: string, location: string) => Promise<void>;
 }) {
@@ -105,6 +108,27 @@ export default function Settings(props: {
       >
         Save identify settings
       </button>
+      <h3 className="text-sm uppercase tracking-wide text-ochre mb-2">Subjects</h3>
+      <p className="text-xs text-paper-dim mb-2">
+        Identification can also record where in the frame the animal is, so sharpness is
+        measured on the animal rather than on the whole picture — a soft bird in front of a
+        crisp branch otherwise scores well. Shots identified before this existed have no
+        subject recorded.
+      </p>
+      <button
+        type="button"
+        className="px-3 py-1 border border-moss text-moss text-sm mb-2 disabled:opacity-40"
+        onClick={props.onFindSubjects}
+        disabled={!props.subjectsMissing}
+      >
+        {props.subjectsMissing
+          ? `Find subjects in ${props.subjectsMissing} shot${props.subjectsMissing === 1 ? "" : "s"}`
+          : "Every identified shot has a subject"}
+      </button>
+      <p className="text-xs text-paper-dim mb-8">
+        Re-runs identification on those shots, one at a time, and can be stopped at any point.
+        The name and field marks are rewritten from the same answer.
+      </p>
       <p className="text-xs text-paper-dim mb-2">
         xAI key (only if you pick cloud). Saved in the library folder, not the git repo.
         {props.hasXaiKey ? " A key is on disk." : " No key saved yet."}

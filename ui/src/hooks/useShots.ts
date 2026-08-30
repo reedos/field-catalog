@@ -13,6 +13,8 @@ export function normalizeShot(s: Shot): Shot {
     gps_from_file: !!s.gps_from_file,
     preview_width: s.preview_width ?? null,
     preview_height: s.preview_height ?? null,
+    subject_box: Array.isArray(s.subject_box) && s.subject_box.length === 4 ? s.subject_box : null,
+    subject_sharpness: s.subject_sharpness ?? null,
   };
 }
 

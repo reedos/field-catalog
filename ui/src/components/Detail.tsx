@@ -222,6 +222,22 @@ export default function Detail(props: {
             transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px)`,
           }}
         />
+        {/* Where the model said the animal is, and so where the score above was taken. */}
+        {props.loupe && shot.subject_box && imgRef.current ? (
+          <div
+            className="pointer-events-none absolute border border-ochre/80"
+            style={{
+              left: "50%",
+              top: "50%",
+              width: shot.subject_box[2] * imgRef.current.naturalWidth,
+              height: shot.subject_box[3] * imgRef.current.naturalHeight,
+              transform:
+                `translate(${-imgRef.current.naturalWidth / 2 + shot.subject_box[0] * imgRef.current.naturalWidth}px, ` +
+                `${-imgRef.current.naturalHeight / 2 + shot.subject_box[1] * imgRef.current.naturalHeight}px) ` +
+                `translate(${pan.x}px, ${pan.y}px)`,
+            }}
+          />
+        ) : null}
         {props.loupe ? (
           <div className="absolute top-2 left-2 flex items-center gap-2 border border-bark bg-ink/80 px-2 py-0.5 text-[11px] text-paper-dim">
             <span className="pointer-events-none">1:1 — drag to pan, L to exit</span>
@@ -302,7 +318,16 @@ export default function Detail(props: {
           <Meter label="ID confidence" value={conf} />
           <Meter label="Focus / sharpness" value={focus} />
           {shot.sharpness != null ? (
-            <p className="text-[11px] text-paper-dim -mt-2">Sharpness score {shot.sharpness.toFixed(0)}</p>
+            <p className="text-[11px] text-paper-dim -mt-2">
+              {shot.subject_sharpness != null ? (
+                <>
+                  <span className="text-paper">On the animal {shot.subject_sharpness.toFixed(0)}</span>
+                  <span> · whole frame {shot.sharpness.toFixed(0)}</span>
+                </>
+              ) : (
+                <>Sharpness score {shot.sharpness.toFixed(0)} · whole frame</>
+              )}
+            </p>
           ) : null}
 
           <h3 className="text-xs uppercase tracking-wide text-paper-dim">Identity</h3>

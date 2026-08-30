@@ -71,7 +71,35 @@ export function useIdentify(deps: {
   }
 
   /** Identify picked shots, or every unlabeled shot in view, one at a time. */
-  async function runIdentifySeries(filtered: Shot[], pickedIds: Set<string>) {
+  /**
+   * `mode: "subjects"` re-runs identify purely to fill in subject boxes on
+   * shots identified before the model was ever asked for one. The confidence
+   * gate is skipped there on purpose: those shots are confident already, which
+   * is exactly why the normal series would refuse every one of them.
+   */
+  async function runIdentifySeries(
+    filtered: Shot[],
+    pickedIds: Set<string>,
+    mode: "identify" | "subjects" = "identify",
+  ) {
+    if (mode === "subjects") {
+      const missing = filtered.filter((s) => s.common_name && !s.subject_box);
+      if (!missing.length) {
+        setError("Every identified shot in this view already has a subject.");
+        return;
+      }
+      const ok = window.confirm(
+        `Find the subject in ${missing.length} shot(s)?
+
+` +
+          "This re-runs identification to get the animal's position, so sharpness can be " +
+          "measured on the animal rather than on the whole frame. The name and field marks " +
+          "are rewritten from the same answer. Stop anytime.",
+      );
+      if (!ok) return;
+      await runQueue(missing);
+      return;
+    }
     const picked = filtered.filter((s) => pickedIds.has(s.id));
     const queue = picked.length ? picked : filtered.filter((s) => !s.common_name);
     // Confidence gate: skip already high confidence
@@ -90,17 +118,22 @@ export function useIdentify(deps: {
       : `Identify ${gated.length} unlabeled shot(s) in the current view, one at a time?`;
     const ok = window.confirm(`${label}\nNot automatic on import. Stop anytime.`);
     if (!ok) return;
+    await runQueue(gated);
+  }
+
+  /** One shot at a time, stoppable between each, reporting where it is. */
+  async function runQueue(queue: Shot[]) {
     cancelIdentify.current = false;
     setIdentifyingSeries(true);
     setIdentifying(true);
     setError("");
     let failed = 0;
     try {
-      for (let i = 0; i < gated.length; i++) {
+      for (let i = 0; i < queue.length; i++) {
         if (cancelIdentify.current) break;
-        const shot = gated[i];
+        const shot = queue[i];
         setSelectedId(shot.id);
-        setBusy(`Identify ${i + 1}/${gated.length}`);
+        setBusy(`Identify ${i + 1}/${queue.length}`);
         try {
           const res = await api.identify(shot.id);
           if (res.shot) patchShot(shot.id, normalizeShot(res.shot));
