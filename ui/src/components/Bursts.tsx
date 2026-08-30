@@ -8,6 +8,7 @@ export default function Bursts(props: {
   onApply: (keepId: string, rejectIds: string[]) => void;
   onOpen: (id: string) => void;
   onCompare: (burstId: string) => void;
+  onCullAll: () => void;
   resolved: number;
   showResolved: boolean;
   onShowResolved: (v: boolean) => void;
@@ -44,6 +45,11 @@ export default function Bursts(props: {
           {props.bursts.length} burst{props.bursts.length === 1 ? "" : "s"}
           {props.showResolved ? "" : " to decide"}
         </h2>
+        {props.showResolved ? null : (
+          <button type="button" className="fc-btn fc-accent text-xs" onClick={props.onCullAll}>
+            Cull them all
+          </button>
+        )}
         {toggle}
       </div>
       <div className="space-y-6">

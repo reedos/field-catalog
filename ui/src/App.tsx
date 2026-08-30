@@ -84,6 +84,16 @@ export default function App() {
   const [auditOpen, setAuditOpen] = useState(false);
   const [burstReviewId, setBurstReviewId] = useState<string | null>(null);
   const [compareBurstId, setCompareBurstId] = useState<string | null>(null);
+  /**
+   * A run of bursts to work through back to back. Resolving one opens the next
+   * without a trip back to the list -- with hundreds of bursts waiting, the
+   * fetch-the-next-one step is most of the cost of culling at all.
+   *
+   * Captured once when the session starts, and walked by position rather than
+   * re-derived: the optimistic write has not reached `shots` yet at the moment
+   * we need to pick the next one.
+   */
+  const [cullQueue, setCullQueue] = useState<string[]>([]);
   const [slideshow, setSlideshow] = useState(false);
   const [pickedIds, setPickedIds] = useState<Set<string>>(() => new Set());
   const searchRef = useRef<HTMLInputElement>(null);
@@ -260,6 +270,31 @@ export default function App() {
     setLoupe(false);
     setCompareBurstId(burstId);
   }
+
+  /** Work through every burst awaiting a decision, one after the next. */
+  function startCullSession() {
+    const ids = bursts.map((b) => b.burst_id);
+    if (!ids.length) return;
+    setCullQueue(ids);
+    openCompare(ids[0]);
+  }
+
+  /** Leave the compare wall; if a session is running, move it on instead. */
+  function finishBurst(resolvedId: string | null) {
+    const i = resolvedId ? cullQueue.indexOf(resolvedId) : -1;
+    const next = i >= 0 ? cullQueue[i + 1] : undefined;
+    if (next) {
+      setCompareBurstId(next);
+      return;
+    }
+    setCompareBurstId(null);
+    setCullQueue([]);
+  }
+
+  const queuePos =
+    compareBurstId && cullQueue.length
+      ? { index: cullQueue.indexOf(compareBurstId) + 1, total: cullQueue.length }
+      : null;
 
   const lifePlates = useMemo(
     () => lifePlateIds.map((id) => shotsById.get(id)).filter((s): s is Shot => !!s),
@@ -816,6 +851,7 @@ const verdicts = useMemo(() => {
             bursts={bursts}
             shotsById={shotsById}
             onCompare={(burstId) => openCompare(burstId)}
+            onCullAll={startCullSession}
             onOpen={(id) => enterBurst(id)}
             onApply={(keepId, rejectIds) => {
               // One batched, undoable gesture -- same path compare's Enter uses.
@@ -967,9 +1003,11 @@ const verdicts = useMemo(() => {
           members={compareMembers}
           keys={keys}
           onVerdict={(id, v) => void setVerdictOnly(id, v)}
+          queuePos={queuePos}
           onResolve={(pairs) => {
+            const finished = compareBurstId;
             void setVerdicts(pairs);
-            setCompareBurstId(null);
+            finishBurst(finished);
             // Land on a survivor, whether it was marked keep during the
             // compare or only just became one.
             const applied = new Map(pairs.map((p) => [p.id, p.verdict]));
@@ -979,11 +1017,15 @@ const verdicts = useMemo(() => {
             if (keeper) setSelectedId(keeper.id);
           }}
           onKeepOnly={(keepId) => {
+            const finished = compareBurstId;
             void keepOneOfBurst(keepId, compareMembers.map((m) => m.id));
-            setCompareBurstId(null);
             setSelectedId(keepId);
+            finishBurst(finished);
           }}
-          onClose={() => setCompareBurstId(null)}
+          onClose={() => {
+            setCompareBurstId(null);
+            setCullQueue([]);
+          }}
         />
       ) : null}
       {auditOpen ? <AuditLog entries={audit} onClose={() => setAuditOpen(false)} /> : null}

@@ -27,6 +27,8 @@ export default function CompareView(props: {
   onVerdict: (id: string, v: Verdict) => void;
   onResolve: (pairs: Array<{ id: string; verdict: Verdict }>) => void;
   onKeepOnly: (keepId: string) => void;
+  /** Position in a run of bursts being worked through, when one is running. */
+  queuePos: { index: number; total: number } | null;
   onClose: () => void;
 }) {
   const [showRejected, setShowRejected] = useState(false);
@@ -201,6 +203,11 @@ export default function CompareView(props: {
           Compare <span className="text-ochre">·</span> {props.members.length} frame
           {props.members.length === 1 ? "" : "s"}
         </div>
+        {props.queuePos ? (
+          <span className="rounded-sm border border-ochre/50 px-1.5 py-0.5 text-[11px] text-ochre">
+            {props.queuePos.index} of {props.queuePos.total}
+          </span>
+        ) : null}
         <div className="flex items-center gap-2 text-xs">
           {kept.length ? <span className="text-moss">{kept.length} keep</span> : null}
           {rejected.length ? <span className="text-reject">{rejected.length} reject</span> : null}
@@ -261,7 +268,7 @@ export default function CompareView(props: {
             </button>
           )}
           <button type="button" onClick={props.onClose} className="fc-btn fc-ghost" title="Escape">
-            Close
+            {props.queuePos ? "End session" : "Close"}
           </button>
         </div>
       </div>
