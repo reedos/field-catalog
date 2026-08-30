@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .animal import infer_animal_type
+from .animal import infer_animal_type, title_common, title_scientific
 
 TYPES = {"bird", "mammal", "herp", "fish", "invertebrate", "other"}
 
@@ -339,8 +339,8 @@ def parse_identity(text: str) -> dict:
     similar = _pick(data, "similarSpecies", "similar_species") or []
     notes = str(_pick(data, "notes") or "").strip()
     return {
-        "common_name": common,
-        "scientific_name": scientific,
+        "common_name": title_common(common),
+        "scientific_name": title_scientific(scientific),
         "animal_type": animal,
         "confidence": confidence,
         "field_marks": _str_list(marks),

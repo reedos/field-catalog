@@ -86,9 +86,26 @@ def run_doctor(catalog: Catalog, *, fix: bool = False, progress=None) -> dict:
     backups = sorted((catalog.library / "backups").glob("catalog-*.sqlite"))
     newest_backup = str(backups[-1]) if backups else None
 
+    from .animal import title_common, title_scientific
+
+    miscased = [
+        s for s in shots
+        if (s.common_name and title_common(s.common_name) != s.common_name)
+        or (s.scientific_name and title_scientific(s.scientific_name) != s.scientific_name)
+    ]
+
     fixed: dict[str, int] = {}
     if fix:
         from .importer import backfill_dimensions
+
+        if miscased:
+            catalog.conn.executemany(
+                "UPDATE shots SET common_name = ?, scientific_name = ? WHERE id = ?",
+                [(title_common(s.common_name), title_scientific(s.scientific_name), s.id)
+                 for s in miscased],
+            )
+            catalog.conn.commit()
+            fixed["names"] = len(miscased)
 
         if no_dimensions:
             fixed["dimensions"] = backfill_dimensions(catalog, progress=progress)["backfilled"]
@@ -122,6 +139,7 @@ def run_doctor(catalog: Catalog, *, fix: bool = False, progress=None) -> dict:
         "orphaned_previews_sample": _sample(orphaned_previews, str),
         "missing_dimensions": len(no_dimensions) - fixed.get("dimensions", 0),
         "missing_hashes": len(hashable) - fixed.get("hashes", 0),
+        "miscased_names": len(miscased) - fixed.get("names", 0),
         "newest_backup": newest_backup,
         "backups": len(backups),
         "fixed": fixed,

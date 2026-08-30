@@ -59,3 +59,34 @@ def infer_animal_type(*parts: str | None) -> str | None:
     if any(w in INVERT for w in words):
         return "invertebrate"
     return ALIAS.get(blob.strip())
+
+
+def title_common(name: str | None) -> str | None:
+    """Capitalise a common name the way field guides do: "Mule Deer".
+
+    Only the first letter of each space-separated word is touched, and only if
+    it is lowercase. That keeps the conventions intact -- "Red-tailed Hawk"
+    rather than "Red-Tailed Hawk", "Anna's Hummingbird" rather than "Anna'S" --
+    and leaves anything already capitalised, including acronyms, alone.
+    """
+    if not name:
+        return name
+    words = []
+    for w in name.strip().split(" "):
+        words.append(w[:1].upper() + w[1:] if w else w)
+    return " ".join(words)
+
+
+def title_scientific(name: str | None) -> str | None:
+    """Binomial nomenclature: genus capitalised, epithet not.
+
+    "odocoileus hemionus" becomes "Odocoileus hemionus", never "Odocoileus
+    Hemionus" -- capitalising the epithet is wrong, not merely untidy.
+    """
+    if not name:
+        return name
+    parts = name.strip().split(" ")
+    if not parts:
+        return name
+    parts[0] = parts[0][:1].upper() + parts[0][1:]
+    return " ".join(parts)

@@ -1,6 +1,6 @@
 [package]
 name = "field-catalog"
-version = "0.1.0"
+version = "0.2.0"
 description = "Field Catalog desktop"
 authors = ["fieldcatalog"]
 edition = "2021"

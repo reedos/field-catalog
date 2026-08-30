@@ -336,6 +336,10 @@ def cmd_identify(ns: argparse.Namespace) -> int:
     if not shot:
         return _out(False, error="unknown id")
     if ns.common_name:
+        from .animal import title_common, title_scientific
+
+        ns.common_name = title_common(ns.common_name)
+        ns.scientific_name = title_scientific(ns.scientific_name)
         animal = ns.animal_type or infer_animal_type(ns.common_name, ns.scientific_name)
         marks = parse_field_marks(ns.field_marks)
         fields: dict[str, object] = {
@@ -362,10 +366,12 @@ def cmd_identify(ns: argparse.Namespace) -> int:
         return _out(False, error=str(e))
     finally:
         _identify_end()
+    from .animal import title_common, title_scientific
+
     updated = cat.update(
         ns.id,
-        common_name=result["common_name"],
-        scientific_name=result["scientific_name"],
+        common_name=title_common(result["common_name"]),
+        scientific_name=title_scientific(result["scientific_name"]),
         animal_type=result["animal_type"],
         confidence=result["confidence"],
         field_marks=json.dumps(result["field_marks"]),

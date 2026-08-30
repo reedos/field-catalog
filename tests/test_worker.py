@@ -1235,3 +1235,49 @@ def test_clearing_a_species_removes_it_from_the_life_list(tmp_path: Path):
     assert cat.get("jay0").life_list_pick is False
     # The heron is untouched.
     assert cat.get("heron").common_name == "Great Blue Heron"
+
+
+def test_species_names_follow_field_guide_conventions():
+    """Common names title-case; scientific names keep the epithet lowercase."""
+    from fieldcatalog.animal import title_common, title_scientific
+
+    assert title_common("mule deer") == "Mule Deer"
+    # Hyphenated compounds keep their convention: not "Red-Tailed".
+    assert title_common("red-tailed hawk") == "Red-tailed Hawk"
+    assert title_common("anna's hummingbird") == "Anna's Hummingbird"
+    assert title_common("Steller's Jay") == "Steller's Jay"
+    assert title_common(None) is None and title_common("") == ""
+
+    # Binomial nomenclature: capitalising the epithet is wrong, not untidy.
+    assert title_scientific("odocoileus hemionus") == "Odocoileus hemionus"
+    assert title_scientific("Odocoileus hemionus") == "Odocoileus hemionus"
+    assert title_scientific(None) is None
+
+
+def test_identify_normalises_the_names_it_writes():
+    from fieldcatalog.vision import parse_identity
+
+    got = parse_identity(json.dumps({
+        "commonName": "mule deer", "scientificName": "odocoileus hemionus",
+        "animalType": "mammal", "confidence": 0.8,
+    }))
+    assert got["common_name"] == "Mule Deer"
+    assert got["scientific_name"] == "Odocoileus hemionus"
+
+
+def test_doctor_reports_and_fixes_miscased_names(tmp_path: Path):
+    from fieldcatalog.maintenance import run_doctor
+
+    cat = Catalog(tmp_path / "library")
+    cat.upsert(Shot(id="a", original_path="a.jpg", preview_path="a.jpg",
+                    common_name="mule deer", scientific_name="odocoileus hemionus"))
+    cat.upsert(Shot(id="b", original_path="b.jpg", preview_path="b.jpg",
+                    common_name="Steller's Jay", scientific_name="Cyanocitta stelleri"))
+
+    assert run_doctor(cat)["miscased_names"] == 1
+    fixed = run_doctor(cat, fix=True)
+    assert fixed["fixed"]["names"] == 1
+    assert fixed["miscased_names"] == 0
+    assert cat.get("a").common_name == "Mule Deer"
+    assert cat.get("a").scientific_name == "Odocoileus hemionus"
+    assert cat.get("b").common_name == "Steller's Jay"  # already correct, untouched
