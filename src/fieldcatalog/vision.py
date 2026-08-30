@@ -23,7 +23,9 @@ PROMPT = (
     "Prefer North American taxa if ambiguous. Return ONLY JSON:\n"
     '{ "commonName", "scientificName", "confidence" (0-1), "fieldMarks" (3-6 strings), '
     '"similarSpecies" (0-3), "notes" (one factual sentence, no second-person, do not say you spotted), '
-    '"animalType": exactly bird|mammal|herp|fish|invertebrate|other }'
+    '"animalType": exactly bird|mammal|herp|fish|invertebrate|other, '
+    '"subject": [x, y, w, h] as fractions of image width/height for the tightest '
+    "box around the animal, or null if you cannot place it confidently }"
 )
 
 
@@ -338,7 +340,9 @@ def parse_identity(text: str) -> dict:
     marks = _pick(data, "fieldMarks", "field_marks") or []
     similar = _pick(data, "similarSpecies", "similar_species") or []
     notes = str(_pick(data, "notes") or "").strip()
+    subject = _subject_box(_pick(data, "subject", "subject_box", "bbox", "box"))
     return {
+        "subject_box": subject,
         "common_name": title_common(common),
         "scientific_name": title_scientific(scientific),
         "animal_type": animal,
@@ -347,6 +351,37 @@ def parse_identity(text: str) -> dict:
         "similar_species": _str_list(similar),
         "notes": notes,
     }
+
+
+def _subject_box(raw: object) -> list[float] | None:
+    """Validate a model-supplied box, or return None.
+
+    Vision models are strong at naming an animal and weak at placing it, so
+    this is deliberately suspicious: anything malformed, inverted, out of
+    range, vanishingly small or nearly the whole frame is discarded rather
+    than trusted. A box covering the entire image says "somewhere in here",
+    which is what we already knew.
+    """
+    if isinstance(raw, dict):
+        raw = [raw.get(k) for k in ("x", "y", "w", "h")]
+    if not isinstance(raw, (list, tuple)) or len(raw) != 4:
+        return None
+    try:
+        x, y, w, h = (float(v) for v in raw)
+    except (TypeError, ValueError):
+        return None
+    # Some models answer in percentages rather than fractions.
+    if max(x, y, w, h) > 1.0:
+        x, y, w, h = (v / 100.0 for v in (x, y, w, h))
+    if not all(0.0 <= v <= 1.0 for v in (x, y, w, h)):
+        return None
+    if w <= 0.01 or h <= 0.01:
+        return None
+    if x + w > 1.001 or y + h > 1.001:
+        return None
+    if w * h > 0.9:
+        return None
+    return [round(x, 4), round(y, 4), round(min(w, 1.0 - x), 4), round(min(h, 1.0 - y), 4)]
 
 
 def _str_list(raw: object) -> list[str]:

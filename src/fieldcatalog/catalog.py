@@ -45,7 +45,9 @@ CREATE TABLE IF NOT EXISTS shots (
   preview_width INTEGER,
   preview_height INTEGER,
   content_hash TEXT,
-  life_list_pick INTEGER NOT NULL DEFAULT 0
+  life_list_pick INTEGER NOT NULL DEFAULT 0,
+  subject_box TEXT,
+  subject_sharpness REAL
 );
 CREATE INDEX IF NOT EXISTS idx_shots_verdict ON shots(verdict);
 CREATE INDEX IF NOT EXISTS idx_shots_status ON shots(original_status);
@@ -83,6 +85,14 @@ class Catalog:
             self.conn.execute(
                 "UPDATE shots SET gps_from_file = 1 WHERE lat IS NOT NULL AND lon IS NOT NULL"
             )
+            added = True
+        # Where the animal is, and how sharp the frame is *there*. The
+        # whole-frame score cannot tell a crisp wing from a crisp eye.
+        if "subject_box" not in cols:
+            self.conn.execute("ALTER TABLE shots ADD COLUMN subject_box TEXT")
+            added = True
+        if "subject_sharpness" not in cols:
+            self.conn.execute("ALTER TABLE shots ADD COLUMN subject_sharpness REAL")
             added = True
         if "similar_species" not in cols:
             self.conn.execute("ALTER TABLE shots ADD COLUMN similar_species TEXT")

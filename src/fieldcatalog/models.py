@@ -35,6 +35,9 @@ class Shot:
     color: Optional[str] = None
     favorite: bool = False
     sharpness: Optional[float] = None
+    # [x, y, w, h] as fractions of the preview, or None when unknown.
+    subject_box: Optional[list[float]] = None
+    subject_sharpness: Optional[float] = None
     quality: Optional[float] = None
     burst_id: str = ""
     tags: list[str] = field(default_factory=list)
@@ -58,6 +61,7 @@ class Shot:
         d["tags"] = ",".join(self.tags)
         d["field_marks"] = json.dumps(self.field_marks)
         d["similar_species"] = json.dumps(self.similar_species)
+        d["subject_box"] = json.dumps(self.subject_box) if self.subject_box else None
         return d
 
     @classmethod
@@ -88,6 +92,8 @@ class Shot:
             color=row["color"],
             favorite=bool(row["favorite"]),
             sharpness=row["sharpness"],
+            subject_box=_box(_col(row, "subject_box")),
+            subject_sharpness=_col(row, "subject_sharpness"),
             quality=row["quality"],
             burst_id=row["burst_id"] or "",
             tags=tags,
@@ -112,6 +118,25 @@ def _col(row: Any, key: str, default: Any = None) -> Any:
     except Exception:
         pass
     return default
+
+
+def _box(raw: Any) -> Optional[list[float]]:
+    """A stored [x, y, w, h]; anything else reads as absent."""
+    if not raw:
+        return None
+    if isinstance(raw, (list, tuple)):
+        vals = list(raw)
+    else:
+        try:
+            vals = json.loads(str(raw))
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(vals, list) or len(vals) != 4:
+        return None
+    try:
+        return [float(v) for v in vals]
+    except (TypeError, ValueError):
+        return None
 
 
 def _marks(raw: Any) -> list[str]:

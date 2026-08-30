@@ -122,6 +122,8 @@ def shot_json(s: Shot) -> dict:
         "lat": s.lat,
         "lon": s.lon,
         "sharpness": s.sharpness,
+        "subject_box": s.subject_box,
+        "subject_sharpness": s.subject_sharpness,
         "quality": s.quality,
         "burst_id": s.burst_id,
         "common_name": s.common_name,
@@ -367,6 +369,20 @@ def cmd_identify(ns: argparse.Namespace) -> int:
     finally:
         _identify_end()
     from .animal import title_common, title_scientific
+    from .sharpness import score_region
+
+    # The model places the animal; we measure the frame there ourselves. A
+    # box it declined to give, or gave badly enough to be rejected upstream,
+    # leaves both fields null and the whole-frame score stands.
+    box = result.get("subject_box")
+    subject_sharpness = None
+    if box:
+        try:
+            subject_sharpness = score_region(Path(shot.preview_path), box)
+        except OSError:
+            subject_sharpness = None
+        if subject_sharpness is None:
+            box = None
 
     updated = cat.update(
         ns.id,
@@ -377,6 +393,8 @@ def cmd_identify(ns: argparse.Namespace) -> int:
         field_marks=json.dumps(result["field_marks"]),
         similar_species=json.dumps(result["similar_species"]),
         notes=result["notes"],
+        subject_box=json.dumps(box) if box else None,
+        subject_sharpness=subject_sharpness,
     )
     return _out(True, shot=shot_json(updated) if updated else shot_json(shot))
 
@@ -388,7 +406,8 @@ def cmd_identify_cancel(ns: argparse.Namespace) -> int:
 # Fields an identification writes. Clearing one means clearing all of them:
 # if the species is wrong, the notes and field marks written about it are too.
 IDENTITY_FIELDS = ("common_name", "scientific_name", "confidence",
-                   "field_marks", "similar_species", "notes")
+                   "field_marks", "similar_species", "notes",
+                   "subject_box", "subject_sharpness")
 
 
 def cmd_life_list_pick(ns: argparse.Namespace) -> int:
