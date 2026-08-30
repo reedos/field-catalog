@@ -425,21 +425,26 @@ export default function App() {
     setView((v) => (v === "bursts" ? "bursts" : "library"));
   }
 
-  /** Keep one frame of a burst and reject the rest, in a single optimistic write. */
-  async function keepOneOfBurst(keepId: string, memberIds: string[]) {
+  /**
+   * Write verdicts to several shots as one optimistic batch and one undo step,
+   * so resolving a burst is a single thing to take back.
+   */
+  async function setVerdicts(pairs: Array<{ id: string; verdict: Verdict }>) {
+    if (!pairs.length) return;
     // A resolved burst leaves the queue; refresh it if that is what we are looking at.
     if (view === "bursts") setTimeout(() => void loadBursts(), 0);
-    recordVerdictUndo(
-      memberIds.map((id) => ({ id, next: (id === keepId ? "keep" : "reject") as Verdict })),
-    );
+    recordVerdictUndo(pairs.map((p) => ({ id: p.id, next: p.verdict })));
     const patches = new Map<string, Partial<Shot>>();
-    for (const id of memberIds) {
-      patches.set(id, { verdict: id === keepId ? "keep" : "reject" });
-    }
+    for (const p of pairs) patches.set(p.id, { verdict: p.verdict });
     await optimistic(patches, () =>
-      Promise.all(
-        memberIds.map((id) => api.setVerdict(id, id === keepId ? "keep" : "reject")),
-      ),
+      Promise.all(pairs.map((p) => api.setVerdict(p.id, p.verdict))),
+    );
+  }
+
+  /** Keep one frame of a burst and reject the rest, in a single optimistic write. */
+  async function keepOneOfBurst(keepId: string, memberIds: string[]) {
+    await setVerdicts(
+      memberIds.map((id) => ({ id, verdict: (id === keepId ? "keep" : "reject") as Verdict })),
     );
   }
 
@@ -956,6 +961,17 @@ const verdicts = useMemo(() => {
           members={compareMembers}
           keys={keys}
           onVerdict={(id, v) => void setVerdictOnly(id, v)}
+          onResolve={(pairs) => {
+            void setVerdicts(pairs);
+            setCompareBurstId(null);
+            // Land on a survivor, whether it was marked keep during the
+            // compare or only just became one.
+            const applied = new Map(pairs.map((p) => [p.id, p.verdict]));
+            const keeper = compareMembers.find(
+              (m) => (applied.get(m.id) ?? m.verdict) === "keep",
+            );
+            if (keeper) setSelectedId(keeper.id);
+          }}
           onKeepOnly={(keepId) => {
             void keepOneOfBurst(keepId, compareMembers.map((m) => m.id));
             setCompareBurstId(null);

@@ -28,7 +28,8 @@ separate, deliberate act behind a dry run and an exact confirmation string.
 - **Cull** with the keyboard: `j`/`k` to walk, `p` keep, `x` reject, `f`
   favorite, `l` for a 1:1 loupe, `Ctrl+Z` to undo.
 - **Compare** a burst: every frame on screen at once with pan and zoom synced
-  across them, culling the pool live until one remains.
+  across them. Mark frames one at a time, or mark the keepers and reject the
+  rest in a stroke, or flag only the duds and keep the rest.
 - **Outings** — the library groups by capture day, so a session is a trip
   rather than a wall of thumbnails.
 - **Identify** species with a local vision model or an API key — optional, see

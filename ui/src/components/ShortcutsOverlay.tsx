@@ -73,8 +73,9 @@ export default function ShortcutsOverlay({ keys, view, onClose }: { keys: Keymap
           <div className="text-sm font-medium text-bark mb-2">Compare view</div>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="text-bark/80">Focus frame</div><div>arrows or j/k</div>
-            <div className="text-bark/80">Reject / keep / restore</div><div>x · p · u</div>
-            <div className="text-bark/80">Keep focused, reject rest</div><div>Enter</div>
+            <div className="text-bark/80">Mark focused, move on</div><div>x reject · p keep</div>
+            <div className="text-bark/80">Undo the last reject</div><div>u</div>
+            <div className="text-bark/80">Finish the burst</div><div>Enter</div>
             <div className="text-bark/80">1:1 zoom, drag pans all</div><div>l or double-click</div>
           </div>
         </div>
