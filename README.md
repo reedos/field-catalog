@@ -43,21 +43,29 @@ separate, deliberate act behind a dry run and an exact confirmation string.
 
 ## Screenshots
 
-<!--
-  Add images to docs/screenshots/ and reference them here, for example:
+![The library with a shot open in the detail panel](docs/screenshots/library.jpg)
 
-  ![The library, grouped by outing](docs/screenshots/library.png)
-  ![Comparing a burst](docs/screenshots/compare.png)
-  ![The life list](docs/screenshots/life-list.png)
+The library groups by outing. A burst collapses to one cell with the rest
+stacked behind it, and the panel carries the identification, the field marks
+and what the focus score thought.
 
-  Take them against a scratch library, not your own: a screenshot of the real
-  thing publishes your filenames, species, place names and capture dates.
-  `python -m fieldcatalog ... init` a throwaway library and import a handful of
-  frames you are happy to show.
--->
+![Comparing every frame of a burst](docs/screenshots/burst-compare.jpg)
 
-_Coming: the library grouped by outing, the burst compare view, and the life
-list._
+Compare puts every frame of a burst on one wall, pan and 1:1 zoom synced across
+all of them. Mark frames one at a time, or mark the two worth having and reject
+the rest in a stroke.
+
+![The life list](docs/screenshots/life-list.jpg)
+
+The life list: one plate per species, numbered in the order you first saw them.
+The automatic pick is a starting point — click a plate to open that frame and
+overrule it.
+
+![The map](docs/screenshots/map-view.jpg)
+
+Everything carrying GPS, on a basemap dimmed to match (there is a light one for
+reading terrain). A place lists the different species found there rather than
+the same one twenty times.
 
 ## Identification
 
@@ -242,3 +250,8 @@ and irrevocably — so nothing here is ever locked away for good.
 
 Source-available rather than open source, deliberately: the commercial rights
 stay with the author for now.
+
+GitHub's sidebar reports this as "Other". Its detector only matches the
+standard open source licenses, and none of those restrict commercial
+competition — so any license that does what this one does shows up the same
+way. The terms are in [LICENSE.md](LICENSE.md) and at [fsl.software](https://fsl.software/).
