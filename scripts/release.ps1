@@ -182,8 +182,15 @@ Native { git push -q origin "v$Version" } "git push tag"
 Ok "pushed main and v$Version"
 
 # The token Git Credential Manager already holds; no separate setup.
-$token = ("protocol=https", "host=github.com", "") -join "`n" | git credential fill |
-         Select-String '^password=' | ForEach-Object { $_.Line.Substring(9) }
+# git credential wants LF-separated fields ending in a blank line. Piping a
+# PowerShell string sends CRLF, and git rejects the whole request as "missing
+# protocol field" -- so hand it a file with the bytes it actually expects.
+$req = [IO.Path]::GetTempFileName()
+try {
+    [IO.File]::WriteAllText($req, "protocol=https`nhost=github.com`n`n".Replace("`r", ""))
+    $cred = & cmd /c "git credential fill < `"$req`" 2>nul"
+} finally { Remove-Item $req -Force -ErrorAction SilentlyContinue }
+$token = $cred | Select-String '^password=' | ForEach-Object { $_.Line.Substring(9) }
 if (-not $token) { Die "No GitHub token available. Release not created; tag is pushed, so you can add it by hand." }
 
 $slug = (git remote get-url origin) -replace '.*github\.com[:/]', '' -replace '\.git$', ''
