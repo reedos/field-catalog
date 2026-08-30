@@ -107,8 +107,8 @@ it up rather than an answer.
 
 ## Install
 
-Download the latest **`Field-Catalog-x.y.z-x64-setup.exe`** from
-[Releases](https://github.com/reedos/field-catalog-worker/releases) and run it.
+Download **`Field-Catalog-x.y.z-x64-setup.exe`** from the
+[latest release](https://github.com/reedos/field-catalog-worker/releases/latest) and run it.
 The Python worker is bundled, so nothing else needs installing.
 
 Windows will warn that the installer is unsigned — **More info → Run anyway**.

@@ -13,6 +13,9 @@
 .PARAMETER SkipPublish
   Build and tag locally, but do not push or create the GitHub release.
 
+.PARAMETER Prerelease
+  Mark the GitHub release as a prerelease, so it does not become Latest.
+
 .PARAMETER DryRun
   Report what would happen and change nothing.
 
@@ -23,7 +26,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [switch]$SkipPublish,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$Prerelease
 )
 
 $ErrorActionPreference = 'Stop'
@@ -204,8 +208,13 @@ Windows will warn that the installer is unsigned: **More info -> Run anyway**.
 See the [README](https://github.com/$slug#readme) for what it does, and [Identification](https://github.com/$slug#identification) if you want automatic species ID -- it is optional.
 "@
 
+# GitHub reads "prerelease" as unstable, not as pre-1.0 -- flagging every
+# build that way leaves the repo with no Latest release and tells visitors
+# nothing here is ready. The version number already says pre-1.0. Pass
+# -Prerelease for builds that genuinely are not meant for general use.
 $release = @{ tag_name = "v$Version"; name = "Field Catalog $Version"; body = $body
-              draft = $false; prerelease = $true } | ConvertTo-Json
+              draft = $false; prerelease = [bool]$Prerelease
+              make_latest = if ($Prerelease) { "false" } else { "true" } } | ConvertTo-Json
 $headers = @{ Authorization = "Bearer $token"; Accept = 'application/vnd.github+json' }
 $created = Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/$slug/releases" `
                              -Headers $headers -Body $release
