@@ -67,12 +67,21 @@ Ok "working tree clean"
 $branch = (git rev-parse --abbrev-ref HEAD).Trim()
 if ($branch -ne 'main') { Write-Host "   note: on branch '$branch', not main" -ForegroundColor Yellow }
 
-$current = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-if ([version]$Version -le [version]$current) { Die "Version $Version is not higher than the current $current" }
-Ok "version $current -> $Version"
-
 if (git tag --list "v$Version") { Die "Tag v$Version already exists" }
 Ok "tag v$Version is free"
+
+# Equal-and-untagged is a resume, not a mistake: an earlier run that failed
+# after the version bump leaves the files already saying $Version. Only a
+# genuinely lower version is wrong.
+$current = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+if ([version]$Version -lt [version]$current) {
+    Die "Version $Version is lower than the current $current"
+}
+if ([version]$Version -eq [version]$current) {
+    Ok "version already $Version and untagged -- resuming an interrupted release"
+} else {
+    Ok "version $current -> $Version"
+}
 
 # --- Bump every file that carries the version --------------------------------
 
@@ -151,9 +160,15 @@ Step "Commit and tag"
 if ($DryRun) { Ok "(skipped in dry run)"; Write-Host "`nDry run complete. Nothing changed." -ForegroundColor Cyan; exit 0 }
 
 Native { git add -A } "git add"
-Native { git commit -q -m "Release $Version" } "git commit"
+# On a resume the version files already say $Version, so there may be nothing
+# to commit. That is fine; the tag is what the release needs.
+if (git diff --cached --quiet) { Ok "nothing new to commit" }
+else {
+    Native { git commit -q -m "Release $Version" } "git commit"
+    Ok "committed"
+}
 Native { git tag -a "v$Version" -m "Field Catalog $Version" } "git tag"
-Ok "committed and tagged v$Version"
+Ok "tagged v$Version"
 
 if ($SkipPublish) {
     Write-Host "`nBuilt and tagged locally. Not pushed (-SkipPublish)." -ForegroundColor Cyan

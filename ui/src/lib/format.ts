@@ -51,3 +51,26 @@ export function animalLabel(t: string | null | undefined): string {
   if (!t) return "";
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
+
+/**
+ * Species name casing, mirroring title_common/title_scientific in the Python
+ * worker (src/fieldcatalog/animal.py). The worker stays authoritative -- CLI
+ * writes and batch identify never pass through here -- but applying it on blur
+ * means the field shows the corrected name immediately instead of after a
+ * round trip. Keep the two in step.
+ */
+export function titleCommon(name: string): string {
+  return name
+    .trim()
+    .split(" ")
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+/** Binomial nomenclature: genus capitalised, epithet left alone. */
+export function titleScientific(name: string): string {
+  const parts = name.trim().split(" ");
+  if (!parts.length || !parts[0]) return name.trim();
+  parts[0] = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+  return parts.join(" ");
+}

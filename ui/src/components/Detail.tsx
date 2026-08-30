@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ANIMAL_TYPES, type AnimalType, type Shot } from "../types";
-import { animalLabel, fmtBytes, fmtDate, fileName, sharpnessMeter } from "../lib/format";
+import { animalLabel, fmtBytes, fmtDate, fileName, sharpnessMeter, titleCommon, titleScientific } from "../lib/format";
 import { previewUrl } from "../lib/preview";
 
 function useFieldMarksSuggestions(all: string[]) {
@@ -92,6 +92,20 @@ export default function Detail(props: {
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
+  }
+
+  /**
+   * Save the identity, casing it the way field guides do as it goes. The
+   * worker normalises too and stays the authority -- CLI writes and batch
+   * identify never come through here -- but doing it on blur means the field
+   * shows the corrected name at once rather than after the round trip.
+   */
+  function saveIdentity() {
+    const c = titleCommon(common);
+    const s = titleScientific(scientific);
+    if (c !== common) setCommon(c);
+    if (s !== scientific) setScientific(s);
+    props.onSaveIdentity(c, s);
   }
 
   /** Replace the mark currently being typed with a chosen suggestion. */
@@ -244,14 +258,14 @@ export default function Detail(props: {
             <input
               value={common}
               onChange={(e) => setCommon(e.target.value)}
-              onBlur={() => props.onSaveIdentity(common, scientific)}
+              onBlur={() => saveIdentity()}
               placeholder="Common name"
               className="bg-charcoal border border-bark px-2 py-1 text-sm"
             />
             <input
               value={scientific}
               onChange={(e) => setScientific(e.target.value)}
-              onBlur={() => props.onSaveIdentity(common, scientific)}
+              onBlur={() => saveIdentity()}
               placeholder="Scientific name"
               className="bg-charcoal border border-bark px-2 py-1 text-sm italic"
             />
