@@ -121,8 +121,82 @@ button {
 }
 
 .leaflet-container {
-  background: #1a2318;
   font-family: inherit;
+}
+
+/*
+ * The basemap is OpenStreetMap, whose tiles are drawn light. Rather than take
+ * on a second tile service -- another dependency, another attribution, another
+ * set of terms to honour if this is ever sold -- the light tiles are filtered
+ * into the warm dark the rest of the app is drawn in.
+ *
+ * invert() alone turns vegetation magenta; the hue-rotate puts the hues back
+ * where they started. The rest was arrived at by rendering real tiles through
+ * the filter and looking: at full saturation the inverted roads come out pink
+ * and the sea comes out a cold slate, both of which fight the palette, so the
+ * colour is drained hard and some of it put back as sepia. Going all the way
+ * to monochrome looks better still until you meet a coastline -- land and
+ * water collapse to the same value. This is the point before that.
+ */
+.leaflet-container.fc-map-dark {
+  background: #1a2318;
+}
+
+.fc-map-dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.82) contrast(0.9) saturate(0.32) sepia(0.45);
+}
+
+.leaflet-container.fc-map-light {
+  background: #c9cfc1;
+}
+
+/*
+ * Leaflet's own chrome is white whichever basemap is showing. The app is not,
+ * so bring the popups, controls and attribution into the palette.
+ */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #241f1a;
+  color: #efe6d6;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.leaflet-popup-content-wrapper {
+  border: 1px solid #3a3228;
+  border-radius: 4px;
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px;
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: #d9cdb8;
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+  color: #c4a36a;
+  background: transparent;
+}
+
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: #241f1a;
+  color: #efe6d6;
+  border-bottom-color: #3a3228;
+}
+
+.leaflet-bar a:hover {
+  color: #c4a36a;
+}
+
+.leaflet-control-attribution {
+  background: rgba(36, 31, 26, 0.82);
+  color: #d9cdb8;
+}
+
+.leaflet-control-attribution a {
+  color: #c4a36a;
 }
 
 .fc-scroll {

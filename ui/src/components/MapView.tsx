@@ -5,6 +5,33 @@ import { previewUrl } from "../lib/preview";
 import { bestShot, speciesKey } from "../lib/ranking";
 import "leaflet/dist/leaflet.css";
 
+const BASEMAP_KEY = "fc.map.basemap";
+
+/**
+ * OpenStreetMap draws light, and a lit rectangle in a dark room is the wrong
+ * shape for this app -- so the tiles are filtered dark by default (see
+ * .fc-map-dark in index.css). The filter costs contrast, though, and reading
+ * terrain is sometimes the whole point of opening the map, so it comes off
+ * with one click and the choice is remembered.
+ */
+function useBasemap() {
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem(BASEMAP_KEY) !== "light";
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(BASEMAP_KEY, dark ? "dark" : "light");
+    } catch {
+      /* private mode, or storage disabled -- the map still works */
+    }
+  }, [dark]);
+  return [dark, setDark] as const;
+}
+
 /**
  * What a place is worth showing: the species found there, not the shots.
  * Twenty frames of one jay is one line, so a popup lists as many different
@@ -44,6 +71,7 @@ export default function MapView(props: {
   onOpen: (id: string) => void;
   onLocation: (id: string, label: string) => void;
 }) {
+  const [dark, setDark] = useBasemap();
   const pins = useMemo(
     () =>
       props.shots.filter(
@@ -73,10 +101,18 @@ export default function MapView(props: {
 
   return (
     <div className="h-full relative">
+      <button
+        type="button"
+        onClick={() => setDark((d) => !d)}
+        className="fc-btn fc-ghost absolute right-3 top-3 z-[1000]"
+        title={dark ? "Show the map as drawn, for reading terrain" : "Dim the map back into the journal"}
+      >
+        {dark ? "Light map" : "Dark map"}
+      </button>
       <MapContainer
         center={[20, 0]}
         zoom={2}
-        className="h-full w-full"
+        className={`h-full w-full ${dark ? "fc-map-dark" : "fc-map-light"}`}
         worldCopyJump
       >
         <TileLayer
