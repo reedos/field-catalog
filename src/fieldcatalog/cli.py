@@ -349,8 +349,21 @@ def cmd_identify(ns: argparse.Namespace) -> int:
             "scientific_name": ns.scientific_name or None,
             "animal_type": animal,
         }
+        # A name the photographer changed by hand is their own identification, so
+        # it is recorded as certain. Leaving the model's old score in place made a
+        # corrected shot look as doubtful as the guess it replaced -- and, being
+        # under the series gate, open to being overwritten by the next Identify.
+        # Only a *change* counts: the detail panel saves this field on blur, so
+        # clicking through an untouched guess must not certify it.
+        def _same(a: str | None, b: str | None) -> bool:
+            return (a or "").strip().casefold() == (b or "").strip().casefold()
+
+        changed = not _same(ns.common_name, shot.common_name) or (
+            bool(ns.scientific_name) and not _same(ns.scientific_name, shot.scientific_name))
         if ns.confidence is not None:
             fields["confidence"] = ns.confidence
+        elif changed:
+            fields["confidence"] = 1.0
         if ns.field_marks is not None:
             fields["field_marks"] = json.dumps(marks)
         updated = cat.update(ns.id, **fields)

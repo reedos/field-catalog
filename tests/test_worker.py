@@ -1281,3 +1281,66 @@ def test_doctor_reports_and_fixes_miscased_names(tmp_path: Path):
     assert cat.get("a").common_name == "Mule Deer"
     assert cat.get("a").scientific_name == "Odocoileus hemionus"
     assert cat.get("b").common_name == "Steller's Jay"  # already correct, untouched
+
+
+def _identify_by_hand(tmp_path: Path, sid: str, **given):
+    from argparse import Namespace
+
+    import fieldcatalog.cli as cli
+
+    ns = Namespace(library=str(tmp_path / "library"), id=sid, common_name="golden eagle",
+                   scientific_name="aquila chrysaetos", animal_type="", field_marks=None,
+                   confidence=None)
+    for key, value in given.items():
+        setattr(ns, key, value)
+    buf = io.StringIO()
+    cli._CAPTURE.buf = buf
+    try:
+        cli.cmd_identify(ns)
+    finally:
+        cli._CAPTURE.buf = None
+    return json.loads(buf.getvalue())
+
+
+def test_a_name_typed_by_hand_is_recorded_as_certain(tmp_path: Path):
+    """The model said Bald Eagle at 0.55; the photographer corrects it."""
+    cat = Catalog(tmp_path / "library")
+    cat.upsert(Shot(id="e", original_path="e.jpg", preview_path="e.jpg",
+                    common_name="Bald Eagle", scientific_name="Haliaeetus leucocephalus",
+                    confidence=0.55))
+
+    out = _identify_by_hand(tmp_path, "e")
+    assert out["ok"] and out["shot"]["common_name"] == "Golden Eagle"
+    assert cat.get("e").confidence == 1.0
+    # 0.9 is the series gate in useIdentify.ts: at 1.0 a later Identify run leaves it alone.
+    assert cat.get("e").confidence >= 0.9
+
+
+def test_an_explicit_confidence_still_wins(tmp_path: Path):
+    cat = Catalog(tmp_path / "library")
+    cat.upsert(Shot(id="e", original_path="e.jpg", preview_path="e.jpg"))
+
+    _identify_by_hand(tmp_path, "e", confidence=0.7)
+    assert cat.get("e").confidence == 0.7
+
+
+def test_clicking_through_an_untouched_guess_does_not_certify_it(tmp_path: Path):
+    """The detail panel saves the name on blur whether or not it was edited."""
+    cat = Catalog(tmp_path / "library")
+    cat.upsert(Shot(id="e", original_path="e.jpg", preview_path="e.jpg",
+                    common_name="Golden Eagle", scientific_name="Aquila chrysaetos",
+                    confidence=0.55))
+
+    _identify_by_hand(tmp_path, "e")                       # same name, retitled from lower case
+    assert cat.get("e").confidence == 0.55
+
+    _identify_by_hand(tmp_path, "e", scientific_name="aquila chrysaetos canadensis")
+    assert cat.get("e").confidence == 1.0                  # a real edit does
+
+
+def test_a_first_name_typed_onto_an_unnamed_shot_is_certain(tmp_path: Path):
+    cat = Catalog(tmp_path / "library")
+    cat.upsert(Shot(id="e", original_path="e.jpg", preview_path="e.jpg"))
+
+    _identify_by_hand(tmp_path, "e")
+    assert cat.get("e").confidence == 1.0
