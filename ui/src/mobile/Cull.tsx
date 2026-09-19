@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Shot, Verdict } from "../types";
 import { previewUrl } from "../lib/preview";
 import { fmtDay } from "../lib/format";
@@ -13,9 +13,76 @@ import { Empty, Stars, TopBar } from "./ui";
  * through it, taking the verdict back with it.
  */
 
-type Step = { id: string; kind: "verdict" | "skip" };
+type Way = "left" | "right" | "up";
+type Step = { id: string; kind: "verdict" | "skip"; way: Way };
+/** A photo that has been thrown: where the finger let go of it, and how fast it was going. */
+type Thrown = { key: number; shot: Shot; way: Way; x: number; y: number; turn: number; vx: number; vy: number };
 const SWIPE = 96; // px of travel that commits
+const FLICK = 0.55; // px/ms: a quick flick commits from less travel than that
 const TAP = 9;
+const calm = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * The thrown photo, on its own layer. It carries on from where it was let go, in
+ * the direction and at the speed it was going, and turns as it leaves. Because it
+ * is not the card underneath, that one is already live: nothing waits for this.
+ */
+function Flying(props: { card: Thrown; onGone: (key: number) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { card } = props;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const w = el.clientWidth || 390;
+    const h = el.clientHeight || 600;
+    const from = `translate(${card.x}px, ${card.y}px) rotate(${card.turn}deg)`;
+    let to: string;
+    let distance: number;
+    if (card.way === "up") {
+      const endY = -(h * 1.15);
+      const endX = card.x + card.vx * 220;
+      to = `translate(${endX}px, ${endY}px) rotate(${card.turn * 1.5}deg)`;
+      distance = Math.abs(endY - card.y);
+    } else {
+      const sign = card.way === "right" ? 1 : -1;
+      const endX = sign * w * 1.45;
+      // Keep the line the finger was drawing; a throw that was level gets a little fall, like a card.
+      const slope = Math.abs(card.vx) > 0.15 ? card.vy / Math.abs(card.vx) : 0;
+      const endY = card.y + Math.max(-0.6, Math.min(0.6, slope)) * Math.abs(endX - card.x) + h * 0.06;
+      to = `translate(${endX}px, ${endY}px) rotate(${sign * Math.max(18, Math.abs(card.turn) + 14)}deg)`;
+      distance = Math.abs(endX - card.x);
+    }
+    const speed = Math.max(Math.hypot(card.vx, card.vy), 1.5); // px/ms; a button press has none of its own
+    const duration = calm() ? 120 : Math.max(260, Math.min(480, distance / speed));
+    const thrown = Math.hypot(card.vx, card.vy) > 0.3;
+    const anim = el.animate(
+      [{ transform: from, opacity: 1 }, { transform: to, opacity: 1, offset: 0.8 }, { transform: to, opacity: 0 }],
+      // Let go of mid-swipe it keeps its speed; from a button it has to gather some first.
+      { duration, easing: thrown ? "cubic-bezier(.25,.6,.45,1)" : "cubic-bezier(.5,0,.8,.55)", fill: "forwards" },
+    );
+    const gone = () => props.onGone(card.key);
+    anim.onfinish = gone;
+    anim.oncancel = gone;
+    return () => {
+      anim.onfinish = anim.oncancel = null;
+      anim.cancel();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div ref={ref} className="pointer-events-none absolute inset-0 will-change-transform" aria-hidden
+         style={{ transform: `translate(${card.x}px, ${card.y}px) rotate(${card.turn}deg)` }}>
+      <img src={previewUrl(card.shot.preview_path)} alt="" draggable={false} className="h-full w-full object-contain" />
+      {card.way === "right" ? <span className="m-stamp m-stamp-keep">KEEP</span> : null}
+      {card.way === "left" ? <span className="m-stamp m-stamp-reject">REJECT</span> : null}
+      {card.way === "up" ? <span className="absolute inset-x-0 top-6 text-center font-serif text-lg tracking-widest text-paper-dim">LATER</span> : null}
+    </div>
+  );
+}
+
+const leanOf = (x: number) => Math.max(-1, Math.min(1, x / 160));
+/** How much of the card underneath shows, 0..1, for a given drag. */
+const showing = (d: { x: number; y: number }) => Math.min(1, (Math.abs(d.x) + Math.max(0, -d.y)) / 200);
 
 export function Cull(props: {
   day: string | null;
@@ -40,9 +107,15 @@ export function Cull(props: {
 
   const [index, setIndex] = useState(0);
   const [drag, setDrag] = useState({ x: 0, y: 0 });
-  const [fly, setFly] = useState<null | "left" | "right" | "up">(null);
+  const [flying, setFlying] = useState<Thrown[]>([]);
+  const [returning, setReturning] = useState(false);
   const history = useRef<Step[]>([]);
   const origin = useRef<{ x: number; y: number } | null>(null);
+  const trail = useRef<{ x: number; y: number; t: number }[]>([]);
+  const thrownKey = useRef(0);
+  const face = useRef<HTMLDivElement>(null);
+  // How the card now on top arrives: rising from underneath, or coming back from where it was thrown.
+  const arrival = useRef<{ kind: "rise"; from: number } | { kind: "return"; way: Way } | null>(null);
 
   const shot: Shot | undefined = shotsById.get(queue[index]);
   const next: Shot | undefined = shotsById.get(queue[index + 1]);
@@ -56,30 +129,64 @@ export function Cull(props: {
     img.src = previewUrl(after.preview_path);
   }, [index, queue, shotsById]);
 
-  function advance(kind: Step["kind"], direction: "left" | "right" | "up") {
-    if (!shot || fly) return;
-    history.current.push({ id: shot.id, kind });
-    setFly(direction);
-    window.setTimeout(() => {
-      setFly(null);
-      setDrag({ x: 0, y: 0 });
-      setIndex((i) => i + 1);
-    }, 170);
+  /** Finger speed over the last tenth of a second, px/ms. */
+  function velocity() {
+    const pts = trail.current;
+    const last = pts[pts.length - 1];
+    const first = pts.find((p) => last && last.t - p.t <= 100);
+    if (!last || !first || last.t === first.t) return { vx: 0, vy: 0 };
+    return { vx: (last.x - first.x) / (last.t - first.t), vy: (last.y - first.y) / (last.t - first.t) };
   }
 
-  function judge(v: Verdict) {
+  function advance(kind: Step["kind"], way: Way, v = { vx: 0, vy: 0 }) {
+    if (!shot) return;
+    history.current.push({ id: shot.id, kind, way });
+    const x = drag.x;
+    const y = Math.min(0, drag.y);
+    thrownKey.current += 1;
+    setFlying((f) => [...f.slice(-3), { key: thrownKey.current, shot, way, x, y, turn: leanOf(x) * 9, ...v }]);
+    arrival.current = { kind: "rise", from: showing(drag) };
+    setDrag({ x: 0, y: 0 });
+    setIndex((i) => i + 1);
+  }
+
+  function judge(v: Verdict, speed?: { vx: number; vy: number }) {
     if (!shot) return;
     store.setVerdict(shot.id, v);
     if (navigator.vibrate) navigator.vibrate(8);
-    advance("verdict", v === "keep" ? "right" : "left");
+    advance("verdict", v === "keep" ? "right" : "left", speed);
   }
 
   function back() {
     const last = history.current.pop();
     if (!last) return;
     if (last.kind === "verdict") store.undo();
+    setFlying([]);
+    arrival.current = { kind: "return", way: last.way };
+    // The card it lands on stays in view until it has landed.
+    setReturning(true);
+    window.setTimeout(() => setReturning(false), 330);
     setIndex((i) => Math.max(0, i - 1));
   }
+
+  // The card that has just become the top one. Animated on the inner face, so the
+  // outer element is free to follow a finger that is already on it.
+  useLayoutEffect(() => {
+    const how = arrival.current;
+    arrival.current = null;
+    const el = face.current;
+    if (!how || !el || calm()) return;
+    if (how.kind === "rise") {
+      el.animate(
+        [{ opacity: how.from, transform: `scale(${0.93 + 0.07 * how.from})` }, { opacity: 1, transform: "scale(1)" }],
+        { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" },
+      );
+    } else {
+      const start = how.way === "up" ? "translate(0, -115%)"
+        : how.way === "right" ? "translate(140%, 6%) rotate(20deg)" : "translate(-140%, 6%) rotate(-20deg)";
+      el.animate([{ transform: start }, { transform: "none" }], { duration: 320, easing: "cubic-bezier(.2,.8,.2,1)" });
+    }
+  }, [shot?.id]);
 
   const title = props.day ? fmtDay(props.day) : "Everything unrated";
 
@@ -112,13 +219,10 @@ export function Cull(props: {
     );
   }
 
-  const lean = Math.max(-1, Math.min(1, drag.x / 160));
+  const lean = leanOf(drag.x);
   const lift = Math.max(0, Math.min(1, -drag.y / 160));
-  const flyTo =
-    fly === "left" ? "translate(-130%, 6%) rotate(-16deg)"
-    : fly === "right" ? "translate(130%, 6%) rotate(16deg)"
-    : fly === "up" ? "translate(0, -120%)"
-    : `translate(${drag.x}px, ${Math.min(0, drag.y)}px) rotate(${lean * 9}deg)`;
+  const under = returning ? 1 : showing(drag);
+  const held = `translate(${drag.x}px, ${Math.min(0, drag.y)}px) rotate(${lean * 9}deg)`;
   const burst = shot.burst_id ? burstSizes.get(shot.burst_id) || 0 : 0;
   const time = (shot.captured_at || "").slice(11, 16);
 
@@ -143,28 +247,39 @@ export function Cull(props: {
             behind a portrait, a landscape frame would otherwise stick out either side. */}
         {next ? (
           <img src={previewUrl(next.preview_path)} alt="" draggable={false}
-               className="absolute inset-0 h-full w-full object-contain transition-opacity duration-150"
-               style={{ opacity: fly ? 1 : Math.min(0.85, (Math.abs(drag.x) + Math.max(0, -drag.y)) / 220) }} />
+               className="absolute inset-0 h-full w-full object-contain"
+               style={{ opacity: under, transform: `scale(${0.93 + 0.07 * under})`,
+                        transition: origin.current ? "none" : "opacity .18s ease-out, transform .18s ease-out" }} />
         ) : null}
+        {/* Keyed by frame: the next photo is a new card that starts in place, not this one
+            sliding back from wherever the last was thrown. */}
         <div
-          className="absolute inset-0 touch-none"
-          style={{ transform: flyTo, transition: fly || !origin.current ? "transform .17s ease-out" : "none" }}
+          key={shot.id}
+          className="absolute inset-0 touch-none will-change-transform"
+          // A swipe that did not commit springs back; one that did is handed to <Flying>.
+          style={{ transform: held, transition: origin.current ? "none" : "transform .28s cubic-bezier(.2,1.2,.3,1)" }}
           onPointerDown={(e) => {
             origin.current = { x: e.clientX, y: e.clientY };
+            trail.current = [{ x: e.clientX, y: e.clientY, t: e.timeStamp }];
             (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
           }}
           onPointerMove={(e) => {
-            if (origin.current) setDrag({ x: e.clientX - origin.current.x, y: e.clientY - origin.current.y });
+            if (!origin.current) return;
+            trail.current = [...trail.current.slice(-7), { x: e.clientX, y: e.clientY, t: e.timeStamp }];
+            setDrag({ x: e.clientX - origin.current.x, y: e.clientY - origin.current.y });
           }}
           onPointerUp={() => {
             const d = drag;
+            const v = velocity();
             origin.current = null;
+            const flickX = Math.abs(v.vx) > FLICK && Math.abs(d.x) > 28 && Math.sign(v.vx) === Math.sign(d.x) && Math.abs(v.vx) > Math.abs(v.vy);
+            const flickUp = v.vy < -FLICK && d.y < -28 && Math.abs(v.vy) > Math.abs(v.vx);
             if (Math.abs(d.x) < TAP && Math.abs(d.y) < TAP) {
               setDrag({ x: 0, y: 0 });
               props.onLoupe(shot.id);
-            } else if (d.x > SWIPE) judge("keep");
-            else if (d.x < -SWIPE) judge("reject");
-            else if (d.y < -SWIPE * 1.2 && Math.abs(d.x) < SWIPE) advance("skip", "up");
+            } else if (d.x > SWIPE || (flickX && d.x > 0)) judge("keep", v);
+            else if (d.x < -SWIPE || (flickX && d.x < 0)) judge("reject", v);
+            else if ((d.y < -SWIPE * 1.2 && Math.abs(d.x) < SWIPE) || flickUp) advance("skip", "up", v);
             else setDrag({ x: 0, y: 0 });
           }}
           onPointerCancel={() => {
@@ -172,13 +287,18 @@ export function Cull(props: {
             setDrag({ x: 0, y: 0 });
           }}
         >
-          <img src={previewUrl(shot.preview_path)} alt={shot.common_name || shot.display_name} draggable={false}
-               className="h-full w-full object-contain" />
-          <span className="m-stamp m-stamp-keep" style={{ opacity: Math.max(0, lean) }}>KEEP</span>
-          <span className="m-stamp m-stamp-reject" style={{ opacity: Math.max(0, -lean) }}>REJECT</span>
-          <span className="absolute inset-x-0 top-6 text-center font-serif text-lg tracking-widest text-paper-dim"
-                style={{ opacity: lift }}>LATER</span>
+          <div ref={face} className="h-full w-full">
+            <img src={previewUrl(shot.preview_path)} alt={shot.common_name || shot.display_name} draggable={false}
+                 className="h-full w-full object-contain" />
+            <span className="m-stamp m-stamp-keep" style={{ opacity: Math.max(0, lean) }}>KEEP</span>
+            <span className="m-stamp m-stamp-reject" style={{ opacity: Math.max(0, -lean) }}>REJECT</span>
+            <span className="absolute inset-x-0 top-6 text-center font-serif text-lg tracking-widest text-paper-dim"
+                  style={{ opacity: lift }}>LATER</span>
+          </div>
         </div>
+        {flying.map((card) => (
+          <Flying key={card.key} card={card} onGone={(k) => setFlying((f) => f.filter((c) => c.key !== k))} />
+        ))}
       </div>
 
       <div className="flex-none border-t border-bark/60 bg-[#1b1814] px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-2.5">
