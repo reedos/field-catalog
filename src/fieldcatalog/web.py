@@ -65,17 +65,65 @@ class Refused(Exception):
         self.status = status
 
 
-def tailscale_ip() -> str:
-    """This machine's tailnet IPv4 address, for --host tailscale."""
-    for exe in ("tailscale", r"C:\Program Files\Tailscale\tailscale.exe"):
+TAILSCALE = ("tailscale", r"C:\Program Files\Tailscale\tailscale.exe")
+
+
+def _tailscale(*args: str) -> str | None:
+    for exe in TAILSCALE:
         try:
-            out = subprocess.run([exe, "ip", "-4"], capture_output=True, text=True, timeout=10)
+            out = subprocess.run([exe, *args], capture_output=True, text=True, timeout=10,
+                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         except (OSError, subprocess.SubprocessError):
             continue
-        ip = (out.stdout or "").strip().splitlines()
-        if out.returncode == 0 and ip:
-            return ip[0].strip()
-    raise SystemExit("could not ask tailscale for this machine's address; pass --host <ip>")
+        if out.returncode == 0 and (out.stdout or "").strip():
+            return out.stdout
+    return None
+
+
+def tailscale_ip() -> str | None:
+    """This machine's tailnet IPv4 address, or None while tailscale is not up yet."""
+    out = _tailscale("ip", "-4")
+    return out.strip().splitlines()[0].strip() if out else None
+
+
+def tailscale_names() -> list[str]:
+    """The names this machine goes by on the tailnet ("my-pc", "my-pc.tail1234.ts.net"),
+    so a phone can use them and the Host check still knows them."""
+    out = _tailscale("status", "--json")
+    try:
+        dns = (json.loads(out)["Self"]["DNSName"] if out else "").strip(".").lower()
+    except (ValueError, KeyError, TypeError):
+        return []
+    return [dns, dns.split(".")[0]] if dns else []
+
+
+def wait_for_tailnet(port: int, patience: float = 900, pause: float = 5,
+                     ip=tailscale_ip, sleep=time.sleep, log=print) -> str:
+    """The tailnet address, once it exists and can be bound.
+
+    Started from the Startup folder this runs before tailscale has an address, and
+    for a few seconds after that the address exists but cannot be bound yet. A
+    server that exits there is simply down until someone notices. So: wait.
+    """
+    import socket
+
+    waited, told = 0.0, False
+    while True:
+        addr = ip()
+        if addr:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                    probe.bind((addr, 0))
+                return addr
+            except OSError:
+                pass
+        if waited >= patience:
+            raise SystemExit("tailscale did not come up; start it, or pass --host <ip>")
+        if not told:
+            log("waiting for tailscale...", flush=True)
+            told = True
+        sleep(pause)
+        waited += pause
 
 
 def default_ui_dir() -> Path:
@@ -137,29 +185,37 @@ class Lanes:
 
 
 class DryRuns:
-    """What has been shown, to whom, and when -- so an execute can be checked against it."""
+    """What has been shown, to whom, and when -- so an execute can be checked against it.
+
+    What counts is the list the dry run came back with, not the ids it was asked
+    about: asked about 388 rejects of which 3 are still on disk, the person saw 3
+    names, and those 3 are what they may remove."""
 
     def __init__(self):
         self._seen: dict[tuple[str, str, str], float] = {}
         self._lock = threading.Lock()
 
     @staticmethod
-    def _ids(ids: str) -> str:
-        return hashlib.sha256(",".join(sorted(i for i in (ids or "").split(",") if i)).encode()).hexdigest()
+    def _key(client: str, command: str, ids) -> tuple[str, str, str]:
+        return client, command, hashlib.sha256(",".join(sorted(set(ids))).encode()).hexdigest()
 
-    def check(self, client: str, command: str, ns: argparse.Namespace) -> None:
-        """Record a dry run, or refuse an execute that no dry run covers."""
-        key = (client, command, self._ids(getattr(ns, "ids", "")))
+    def allow(self, client: str, command: str, ns: argparse.Namespace) -> None:
+        """Refuse an execute for anything but a list this device was just shown."""
+        key = self._key(client, command, [i for i in (getattr(ns, "ids", "") or "").split(",") if i])
         now = time.time()
         with self._lock:
             self._seen = {k: t for k, t in self._seen.items() if now - t < DRY_RUN_TTL}
-            if not getattr(ns, "execute", False):
-                self._seen[key] = now
-                return
             if key not in self._seen:
-                raise Refused(409, "refusing to remove files that were not listed first: run the same "
-                                   "request without --execute, look at the list, then repeat it")
+                raise Refused(409, "refusing to remove files that were not listed first: ask without "
+                                   "--execute, look at the list, then ask for exactly those files")
             del self._seen[key]          # one look, one removal
+
+    def shown(self, client: str, command: str, result: dict) -> None:
+        """Remember what a dry run listed."""
+        listed = [f.get("id") for f in result.get("files") or [] if isinstance(f, dict) and f.get("id")]
+        if result.get("ok") and listed:
+            with self._lock:
+                self._seen[self._key(client, command, listed)] = time.time()
 
 
 def check_command(library: str, argv) -> argparse.Namespace:
@@ -245,9 +301,14 @@ class App:
 
     def worker(self, client: str, argv) -> dict:
         ns = check_command(str(self.library), argv)
-        if argv[0] in DISK_COMMANDS:
-            self.dry_runs.check(client, argv[0], ns)
-        return self.lanes.run(argv)
+        if argv[0] not in DISK_COMMANDS:
+            return self.lanes.run(argv)
+        if getattr(ns, "execute", False):
+            self.dry_runs.allow(client, argv[0], ns)
+            return self.lanes.run(argv)
+        result = self.lanes.run(argv)
+        self.dry_runs.shown(client, argv[0], result)
+        return result
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -404,9 +465,22 @@ def make_server(library: str, host: str, port: int, ui_dir: Path, extra_hosts=()
 
 
 def cmd_web(ns: argparse.Namespace) -> int:
-    host = tailscale_ip() if ns.host == "tailscale" else ns.host
-    ui_dir = Path(ns.ui) if ns.ui else default_ui_dir()
+    import sys
+
+    if getattr(ns, "log", ""):
+        # Started hidden (pythonw, the Startup folder) there is no console to print to.
+        log = Path(ns.log).expanduser()
+        log.parent.mkdir(parents=True, exist_ok=True)
+        if log.is_file() and log.stat().st_size > 2_000_000:
+            log.replace(log.with_suffix(log.suffix + ".1"))
+        sys.stdout = sys.stderr = open(log, "a", encoding="utf-8", buffering=1)  # noqa: SIM115
     extra = [h.strip() for h in (ns.allow_host or "").split(",") if h.strip()]
+    if ns.host == "tailscale":
+        host = wait_for_tailnet(ns.port)
+        extra += tailscale_names()
+    else:
+        host = ns.host
+    ui_dir = Path(ns.ui) if ns.ui else default_ui_dir()
     server = make_server(ns.library, host, ns.port, ui_dir, extra)
     print(f"Field Catalog on http://{host}:{ns.port}/  (library {ns.library})", flush=True)
     if extra:

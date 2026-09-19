@@ -1,0 +1,353 @@
+/*
+ * The phone shell. Same field-journal palette and the same serif as the desktop;
+ * what changes is the hand. One thumb, the bottom third of the screen, targets no
+ * smaller than 44px, and nothing that needs a hover to be found.
+ */
+
+.m-app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #161410;
+  color: #efe6d6;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  /* min-content is a flex item's default minimum: without this one wide child sets the track */
+  min-width: 0;
+}
+
+.m-screen {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.m-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* --- chrome --- */
+
+.m-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3.25rem;
+  padding: calc(env(safe-area-inset-top) + 0.35rem) 1rem 0.35rem;
+  border-bottom: 1px solid rgba(58, 50, 40, 0.7);
+  background: rgba(22, 20, 16, 0.96);
+}
+
+.m-iconbtn {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  color: #d9cdb8;
+  flex: none;
+}
+.m-iconbtn:active {
+  background: rgba(58, 50, 40, 0.7);
+}
+
+.m-tabbar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 0.3rem 0.25rem calc(env(safe-area-inset-bottom) + 0.3rem);
+  border-top: 1px solid rgba(58, 50, 40, 0.8);
+  background: #1b1814;
+  flex: none;
+}
+.m-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 3rem;
+  padding: 0.3rem 0;
+  color: rgba(217, 205, 184, 0.55);
+  border-radius: 0.6rem;
+}
+.m-tab-active {
+  color: #c4a36a;
+}
+.m-tab:active {
+  background: rgba(58, 50, 40, 0.5);
+}
+.m-badge {
+  position: absolute;
+  top: -0.3rem;
+  left: 0.95rem;
+  min-width: 1.05rem;
+  padding: 0 0.28rem;
+  border-radius: 9999px;
+  background: #a65d4a;
+  color: #efe6d6;
+  font-size: 10px;
+  line-height: 1.05rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- sheets --- */
+
+.m-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(10, 9, 7, 0.62);
+  animation: m-fade 0.16s ease-out;
+}
+.m-sheet {
+  width: 100%;
+  max-height: 86dvh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 1.1rem 1.1rem 0 0;
+  border-top: 1px solid #3a3228;
+  background: #211c17;
+  box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.55);
+  animation: m-rise 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.m-sheet-tall {
+  height: 86dvh;
+}
+.m-sheet-grip {
+  display: grid;
+  place-items: center;
+  height: 1.75rem;
+  flex: none;
+  touch-action: none;
+  cursor: grab;
+}
+.m-sheet-grip span {
+  width: 2.5rem;
+  height: 0.27rem;
+  border-radius: 9999px;
+  background: #4a4034;
+}
+.m-sheet-body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0 1.25rem calc(env(safe-area-inset-bottom) + 1.25rem);
+}
+
+@keyframes m-rise {
+  from { transform: translateY(40%); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes m-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* --- pieces --- */
+
+.m-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2.25rem;
+  padding: 0 0.85rem;
+  border-radius: 9999px;
+  border: 1px solid #3a3228;
+  background: #211c17;
+  color: #d9cdb8;
+  font-size: 13px;
+  white-space: nowrap;
+  flex: none;
+}
+.m-chip:active { background: #3a3228; }
+.m-chip-on-moss { border-color: #6a7a52; background: rgba(106, 122, 82, 0.22); color: #efe6d6; }
+.m-chip-on-ochre { border-color: #c4a36a; background: rgba(196, 163, 106, 0.18); color: #efe6d6; }
+.m-chip-on-reject { border-color: #a65d4a; background: rgba(166, 93, 74, 0.22); color: #efe6d6; }
+
+.m-thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 0.35rem;
+  background: #241f1a;
+}
+.m-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.m-thumb:active { opacity: 0.8; }
+.m-stack {
+  position: absolute;
+  right: 0.3rem;
+  bottom: 0.3rem;
+  padding: 0 0.35rem;
+  border-radius: 0.3rem;
+  background: rgba(22, 20, 16, 0.82);
+  color: #efe6d6;
+  font-size: 11px;
+  line-height: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.m-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 3.4rem;
+  padding: 0.7rem 1.1rem;
+  border-bottom: 1px solid rgba(58, 50, 40, 0.55);
+}
+button.m-row:active { background: rgba(58, 50, 40, 0.45); }
+
+.m-section {
+  padding: 1.3rem 1.1rem 0.45rem;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(217, 205, 184, 0.6);
+}
+
+.m-input {
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0 0.85rem;
+  border-radius: 0.6rem;
+  border: 1px solid #3a3228;
+  background: #161410;
+  color: #efe6d6;
+  font-size: 16px; /* below 16px iOS zooms the page on focus */
+  outline: none;
+}
+.m-input:focus { border-color: #6a7a52; }
+.m-input::placeholder { color: rgba(217, 205, 184, 0.45); }
+.m-label {
+  display: block;
+  margin: 0.95rem 0 0.35rem;
+  font-size: 12px;
+  color: rgba(217, 205, 184, 0.7);
+}
+
+.m-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.9rem;
+  padding: 0 1.1rem;
+  border-radius: 0.7rem;
+  border: 1px solid #3a3228;
+  background: #2a241e;
+  color: #efe6d6;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.m-btn:active { transform: translateY(1px); filter: brightness(1.15); }
+.m-btn:disabled { opacity: 0.4; }
+.m-btn-keep { border-color: #6a7a52; background: #4e5c3c; }
+.m-btn-reject { border-color: #a65d4a; background: rgba(166, 93, 74, 0.28); color: #f0c9bd; }
+.m-btn-danger { border-color: #a65d4a; background: #a65d4a; color: #efe6d6; }
+.m-btn-accent { border-color: #c4a36a; background: rgba(196, 163, 106, 0.16); color: #e6cf9f; }
+.m-btn-block { width: 100%; }
+
+/* the two decisions, big enough to hit without looking */
+.m-verdict {
+  display: grid;
+  place-items: center;
+  width: 4.4rem;
+  height: 4.4rem;
+  border-radius: 9999px;
+  font-size: 1.75rem;
+  border: 1.5px solid;
+  transition: transform 0.12s ease-out;
+}
+.m-verdict:active { transform: scale(0.93); }
+.m-verdict-keep { border-color: #6a7a52; background: rgba(106, 122, 82, 0.2); color: #b9cc9c; }
+.m-verdict-reject { border-color: #a65d4a; background: rgba(166, 93, 74, 0.18); color: #e2a897; }
+.m-verdict-on.m-verdict-keep { background: #6a7a52; color: #efe6d6; }
+.m-verdict-on.m-verdict-reject { background: #a65d4a; color: #efe6d6; }
+.m-round {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  border: 1px solid #3a3228;
+  background: rgba(36, 31, 26, 0.9);
+  color: #d9cdb8;
+  font-size: 1.15rem;
+}
+.m-round:active { background: #3a3228; }
+.m-round:disabled { opacity: 0.35; }
+
+.m-stamp {
+  position: absolute;
+  top: 12%;
+  padding: 0.2rem 0.8rem;
+  border: 3px solid;
+  border-radius: 0.5rem;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-size: 2rem;
+  letter-spacing: 0.12em;
+  pointer-events: none;
+}
+.m-stamp-keep { left: 8%; transform: rotate(-12deg); color: #b9cc9c; border-color: #b9cc9c; }
+.m-stamp-reject { right: 8%; transform: rotate(12deg); color: #e2a897; border-color: #e2a897; }
+
+.m-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 5.2rem);
+  z-index: 80;
+  max-width: calc(100vw - 2rem);
+  transform: translateX(-50%);
+  padding: 0.65rem 1rem;
+  border-radius: 0.8rem;
+  border: 1px solid #3a3228;
+  background: #2a241e;
+  color: #efe6d6;
+  font-size: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: m-fade 0.15s ease-out;
+}
+.m-toast-error { border-color: #a65d4a; background: #3a211b; }
+
+.m-progress {
+  height: 3px;
+  background: #2a241e;
+}
+.m-progress > span {
+  display: block;
+  height: 100%;
+  background: #c4a36a;
+  transition: width 0.25s ease-out;
+}
+
+.m-noselect {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-sheet, .m-scrim, .m-toast { animation: none; }
+  .m-verdict, .m-progress > span { transition: none; }
+}
+
+/* The desktop map, reused. A phone pinch-zooms, and the buttons sit on the pin count. */
+.m-app .leaflet-control-zoom { display: none; }
+.m-app .leaflet-container { background: #161410; }

@@ -863,6 +863,7 @@ def build_parser() -> argparse.ArgumentParser:
     wb.add_argument("--ui", default="", help="built UI folder (default: ui/dist beside the source)")
     wb.add_argument("--allow-host", default="",
                     help="other names this server answers to, comma-separated (a MagicDNS name)")
+    wb.add_argument("--log", default="", help="append output to this file (for running hidden at logon)")
     wb.set_defaults(func=cmd_web)
 
     au = sub.add_parser("audit", help="read audit log")

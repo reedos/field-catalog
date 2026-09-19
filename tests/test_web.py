@@ -123,8 +123,17 @@ def test_args_must_be_a_list_of_strings(site):
 def gate(site, monkeypatch):
     """The disk gate with the worker stubbed out: nothing is ever actually removed."""
     ran = []
-    monkeypatch.setattr(site["app"].lanes, "run", lambda argv, timeout=900: ran.append(argv) or {"ok": True})
+
+    def run(argv, timeout=900):
+        ran.append(argv)
+        ids = argv[argv.index("--ids") + 1].split(",")
+        return {"ok": True, "files": [{"id": i} for i in ids if i not in GONE]}   # a dry run lists what is on disk
+
+    monkeypatch.setattr(site["app"].lanes, "run", run)
     return site["app"], ran
+
+
+GONE = {"gone1", "gone2"}                                     # rejected long ago, already off the disk
 
 
 DELETE = ["delete-originals", "--ids", "a,b", "--confirm", "DELETE_ORIGINALS"]
@@ -167,6 +176,27 @@ def test_the_dry_run_has_to_be_for_these_ids_this_action_this_device_and_recent(
         app.worker("100.1.1.1", DELETE + ["--execute"])
 
 
+def test_what_may_go_is_what_the_dry_run_listed_not_what_it_was_asked_about(gate):
+    """The app asks about every reject, the dry run lists the ones still on disk, and those are
+    the ids the execute names. That has to pass; the full asked-about list does not."""
+    app, ran = gate
+    asked = ["delete-originals", "--ids", "a,gone1,b,gone2", "--confirm", "DELETE_ORIGINALS"]
+    app.worker("100.1.1.1", asked)
+    with pytest.raises(web.Refused):                          # never listed, so never shown
+        app.worker("100.1.1.1", asked + ["--execute"])
+    app.worker("100.1.1.1", asked)
+    app.worker("100.1.1.1", DELETE + ["--execute"])          # a,b: exactly what was listed
+    assert ran[-1][-1] == "--execute"
+
+
+def test_a_dry_run_that_lists_nothing_allows_nothing(gate):
+    app, ran = gate
+    nothing = ["delete-originals", "--ids", "gone1", "--confirm", "DELETE_ORIGINALS"]
+    app.worker("100.1.1.1", nothing)
+    with pytest.raises(web.Refused):
+        app.worker("100.1.1.1", nothing + ["--execute"])
+
+
 # --- a web page in the same browser cannot drive it ---------------------------------
 
 
@@ -183,6 +213,29 @@ def test_requests_must_be_json_from_this_origin_to_a_name_we_answer_to(site):
     assert call(site, "GET", "/api/paths", headers={"Host": "evil.example"})[0].status == 421
     assert call(site, "POST", "/api/worker", b"x" * (web.MAX_BODY + 1))[0].status == 413
     assert call(site, "POST", "/api/other", ok)[0].status == 404
+
+
+# --- starting at logon, before the tailnet is up ----------------------------------------
+
+
+def test_it_waits_for_tailscale_instead_of_dying_at_boot():
+    answers = iter([None, None, "127.0.0.1"])              # no address yet, twice; then one
+    naps = []
+    got = web.wait_for_tailnet(0, ip=lambda: next(answers), sleep=naps.append, log=lambda *a, **k: None)
+    assert got == "127.0.0.1" and naps == [5, 5]
+
+
+def test_it_waits_while_the_address_exists_but_cannot_be_bound_yet():
+    answers = iter(["203.0.113.7", "127.0.0.1"])           # first one is not ours to bind
+    naps = []
+    assert web.wait_for_tailnet(0, ip=lambda: next(answers), sleep=naps.append, log=lambda *a, **k: None) == "127.0.0.1"
+    assert naps == [5]
+
+
+def test_it_gives_up_eventually_with_a_reason():
+    with pytest.raises(SystemExit) as stop:
+        web.wait_for_tailnet(0, patience=10, ip=lambda: None, sleep=lambda s: None, log=lambda *a, **k: None)
+    assert "tailscale did not come up" in str(stop.value)
 
 
 # --- files ---------------------------------------------------------------------------
