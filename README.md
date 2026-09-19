@@ -205,6 +205,32 @@ Keepers already copied elsewhere use `offload-originals` with
 `OFFLOAD_ORIGINALS`. Both route through the recycle bin unless `--permanent` is
 passed, back the catalog up first, and append to `audit.jsonl`.
 
+## A second opinion
+
+`fieldcatalog advise` shows every burst to the local model as one numbered contact
+sheet and asks what it would keep, which frame is the best of the burst, and whether
+the burst holds more than one photograph worth having.
+
+```bash
+fieldcatalog --library ~/FieldCatalog advise --dry-run   # count the work first
+fieldcatalog --library ~/FieldCatalog advise --progress   # about 13s per sheet
+```
+
+**It decides nothing.** Advice is written to its own table; a test fingerprints the
+entire shots table before and after a pass and fails if a single byte moved. Verdicts,
+stars and names stay yours. In the app the advice appears beside each frame while you
+cull, and the compare strip marks the model's pick -- most useful when it disagrees
+with the sharpest frame, because sharpness cannot see a turned head or a branch across
+the face.
+
+Judging by the burst rather than the frame is the point. "Is this sharp enough" has no
+answer on its own; "which of these twelve" has a good one. Bursts longer than a sheet
+are cut into sheets of twelve, each names a winner, and the winners go back to the
+model together so one pick survives.
+
+Run `fieldcatalog advice --disagreed` afterwards to see where your verdicts and the
+model's differ.
+
 ## On a phone
 
 `fieldcatalog web` serves the same app to a browser, and a phone gets its own

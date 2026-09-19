@@ -72,6 +72,9 @@ These are safety invariants, not style preferences. The README states them too.
    catalog backup precedes every `--execute` (a failed backup aborts the delete; `--no-backup`
    overrides).
 6. Executed unlinks append a JSONL record to `<library>/audit.jsonl`. Don't bypass it.
+7. **`advise` writes to `advice` and to nothing else.** The local model recommends; Reed decides.
+   `test_advising_never_touches_a_single_thing_about_a_shot` fingerprints the whole shots table
+   around a pass. Never let advice set a verdict, a star or a name, however confident it looks.
 
 7. **Over the network the disk rules only tighten.** `web.py` parses every request with the CLI's own
    parser and judges the namespace (argparse accepts `--perm` for `--permanent`; a check on the
