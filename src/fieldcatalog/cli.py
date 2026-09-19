@@ -855,6 +855,16 @@ def build_parser() -> argparse.ArgumentParser:
     sv = sub.add_parser("serve", help="persistent worker: JSON requests on stdin, responses on stdout")
     sv.set_defaults(func=cmd_serve)
 
+    wb = sub.add_parser("web", help="serve the app to a phone on your private network (no login: bind it "
+                                     "to an address only your own devices can reach)")
+    wb.add_argument("--host", default="127.0.0.1",
+                    help="address to bind; 'tailscale' asks tailscale for this machine's address")
+    wb.add_argument("--port", type=int, default=8795)
+    wb.add_argument("--ui", default="", help="built UI folder (default: ui/dist beside the source)")
+    wb.add_argument("--allow-host", default="",
+                    help="other names this server answers to, comma-separated (a MagicDNS name)")
+    wb.set_defaults(func=cmd_web)
+
     au = sub.add_parser("audit", help="read audit log")
     au.add_argument("--limit", type=int, default=200)
     au.set_defaults(func=cmd_audit)
@@ -934,6 +944,12 @@ def serve_loop(library: str, stdin, stdout) -> None:
 
     slow_q.put(None)
     slow_thread.join(timeout=5)
+
+
+def cmd_web(ns: argparse.Namespace) -> int:
+    from .web import cmd_web as run
+
+    return run(ns)
 
 
 def cmd_serve(ns: argparse.Namespace) -> int:
