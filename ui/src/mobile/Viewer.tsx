@@ -97,7 +97,7 @@ export function Viewer(props: {
                 {[fmtDay((shot.captured_at || "").slice(0, 10)), shot.location].filter(Boolean).join(" · ")}
               </p>
             </div>
-            <span className="w-11 text-right text-xs tabular-nums text-paper-dim/70">{index + 1}/{props.ids.length}</span>
+            <span className="min-w-[2.75rem] flex-none whitespace-nowrap pr-2 text-right text-xs tabular-nums text-paper-dim/70">{index + 1}/{props.ids.length}</span>
           </div>
 
           <div className="flex-none bg-[#1b1814] px-5 pb-[calc(env(safe-area-inset-bottom)+0.7rem)] pt-2.5">

@@ -464,6 +464,15 @@ def make_server(library: str, host: str, port: int, ui_dir: Path, extra_hosts=()
     return server
 
 
+def check_host(host: str) -> str:
+    """There is no login: the address it listens on is who may use it. Every
+    interface at once is never the answer to that."""
+    if (host or "").strip() in ("", "0.0.0.0", "::", "[::]", "*"):
+        raise SystemExit("refusing to listen on every interface: this server has no login. "
+                         "Use --host tailscale, or one address of this machine.")
+    return host.strip()
+
+
 def cmd_web(ns: argparse.Namespace) -> int:
     import sys
 
@@ -479,7 +488,7 @@ def cmd_web(ns: argparse.Namespace) -> int:
         host = wait_for_tailnet(ns.port)
         extra += tailscale_names()
     else:
-        host = ns.host
+        host = check_host(ns.host)
     ui_dir = Path(ns.ui) if ns.ui else default_ui_dir()
     server = make_server(ns.library, host, ns.port, ui_dir, extra)
     print(f"Field Catalog on http://{host}:{ns.port}/  (library {ns.library})", flush=True)

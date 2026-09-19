@@ -27,6 +27,15 @@ npm --prefix ui run dev          # browser-only (scripts/dev-browser.bat)
 npm --prefix ui run build        # tsc --noEmit && vite build
 ```
 
+**The phone build** is `fieldcatalog web` (`src/fieldcatalog/web.py`) serving `ui/dist`, with the
+phone screens in `ui/src/mobile/` (`main.tsx` picks them when it is not Tauri and the screen is
+narrow; `?desktop` / `?phone` force it). On Reed's PC it runs from the Startup folder via
+`scripts/phone-server.ps1`, from this working tree (editable install) -- so a broken `web.py` or a
+missing `ui/dist` breaks his phone at the next logon. After changing either: `npm --prefix ui run
+build`, then `scripts\phone-server.ps1 stop` and `start`. It uses python.exe, not pythonw.exe,
+because that is the interpreter Windows Firewall already allows. Never test against the real
+library: `web --host 127.0.0.1 --library <a throwaway copy>`.
+
 **Use the project `.venv`, not the system Python.** Running bare `pytest` picks up system Python 3.14,
 which lacks `send2trash`, and `test_delete_uses_the_recycle_bin_by_default` fails with
 `ModuleNotFoundError`. That is an environment artifact, not a real failure — the venv runs 37/37 green.
@@ -63,6 +72,12 @@ These are safety invariants, not style preferences. The README states them too.
    catalog backup precedes every `--execute` (a failed backup aborts the delete; `--no-backup`
    overrides).
 6. Executed unlinks append a JSONL record to `<library>/audit.jsonl`. Don't bypass it.
+
+7. **Over the network the disk rules only tighten.** `web.py` parses every request with the CLI's own
+   parser and judges the namespace (argparse accepts `--perm` for `--permanent`; a check on the
+   strings would wave it through). It refuses `--permanent`, `--no-backup`, `--allow-any-verdict`,
+   and any `--execute` whose ids are not exactly the `files` a dry run listed to that device in the
+   last ten minutes. It binds one address, never `0.0.0.0`, and checks Host, Origin and content type.
 
 Delete expects verdict `reject`, offload expects `keep`, overridable only with `--allow-any-verdict`.
 Per-id failures collect into an `errors` list so one bad id never aborts a batch — preserve that.

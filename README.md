@@ -203,6 +203,41 @@ Keepers already copied elsewhere use `offload-originals` with
 `OFFLOAD_ORIGINALS`. Both route through the recycle bin unless `--permanent` is
 passed, back the catalog up first, and append to `audit.jsonl`.
 
+## On a phone
+
+`fieldcatalog web` serves the same app to a browser, and a phone gets its own
+screens: swipe right to keep and left to reject, with Undo; the library by
+outing; a loupe that fetches a 1:1 crop from the original; correcting a species,
+naming a place, labelling a whole shooting day at once; bursts with compare; the
+life list; and everything under More, down to freeing disk space. The PC does
+the work and keeps the photographs. The phone downloads about 80 KB of app and
+then previews as it needs them.
+
+```bash
+npm --prefix ui run build
+fieldcatalog --library ~/FieldCatalog web --host tailscale      # port 8795
+```
+
+There is no login, so where it listens is the whole of its security. `--host
+tailscale` binds this machine's [Tailscale](https://tailscale.com) address and
+nothing else: devices signed in to your tailnet can reach it, the local network
+and the internet cannot. It refuses `0.0.0.0`. Requests must be JSON from its own
+origin to a name it answers to, so a web page open in the same browser cannot
+drive it.
+
+Over the network the disk rules get stricter, not looser. `--permanent`,
+`--no-backup` and `--allow-any-verdict` are refused outright, and `--execute`
+only works for exactly the files a dry run listed to that same device in the
+last ten minutes, once. The confirm word is still typed by hand.
+
+On Windows, `scripts\phone-server.ps1 install` starts it hidden now and at every
+logon (it waits for Tailscale to come up); `status`, `stop` and `remove` do what
+they say. Output goes to `web.log` in the library.
+
+The desktop app and the phone can be open at once. Each reloads the catalog when
+it starts and after its own changes, so a verdict made on the phone shows on the
+desktop after a refresh there.
+
 ## Rules the app holds itself to
 
 These are safety invariants, not preferences. They are enforced in the worker,

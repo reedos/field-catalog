@@ -238,6 +238,14 @@ def test_it_gives_up_eventually_with_a_reason():
     assert "tailscale did not come up" in str(stop.value)
 
 
+@pytest.mark.parametrize("everywhere", ["0.0.0.0", "::", "", " 0.0.0.0 "])
+def test_it_will_not_listen_on_every_interface(everywhere):
+    with pytest.raises(SystemExit) as stop:
+        web.check_host(everywhere)
+    assert "no login" in str(stop.value)
+    assert web.check_host("100.64.0.7") == "100.64.0.7"
+
+
 # --- files ---------------------------------------------------------------------------
 
 
