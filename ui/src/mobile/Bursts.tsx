@@ -126,6 +126,7 @@ export function Compare(props: { burstId: string; onClose: () => void; onLoupe: 
     );
   }
   const kept = members.filter((m) => m.verdict === "keep");
+  const advice = store.advice.get(shot.id);
   const best = measure(members.find((m) => m.id === sharpestId) || shot);
   const relative = best > 0 && measure(shot) >= 0 ? Math.round((measure(shot) / best) * 100) : null;
   const toggle = (v: Verdict) => store.setVerdict(shot.id, shot.verdict === v ? "unrated" : v);
@@ -167,7 +168,13 @@ export function Compare(props: { burstId: string; onClose: () => void; onLoupe: 
                 {m.verdict === "keep" ? "✓" : "✕"}
               </span>
             ) : null}
-            {m.id === sharpestId ? <span className="absolute inset-x-0 bottom-0 bg-ink/75 text-center text-[9px] leading-4 text-ochre">sharpest</span> : null}
+            {store.advice.get(m.id)?.pick ? (
+              <span className="absolute inset-x-0 bottom-0 bg-ink/80 text-center text-[9px] leading-4 text-ochre">
+                {m.id === sharpestId ? "sharpest · pick" : "model's pick"}
+              </span>
+            ) : m.id === sharpestId ? (
+              <span className="absolute inset-x-0 bottom-0 bg-ink/75 text-center text-[9px] leading-4 text-paper-dim">sharpest</span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -177,7 +184,13 @@ export function Compare(props: { burstId: string; onClose: () => void; onLoupe: 
           <button type="button" className={`m-verdict m-verdict-reject !h-14 !w-14 !text-2xl ${shot.verdict === "reject" ? "m-verdict-on" : ""}`}
                   onClick={() => toggle("reject")} aria-pressed={shot.verdict === "reject"} aria-label="Reject this frame">✕</button>
           <p className="px-3 text-center text-xs leading-snug text-paper-dim/80">
-            {kept.length ? `${kept.length} marked to keep` : "Mark the ones worth having"}
+            {advice ? (
+              <span className={advice.pick ? "text-ochre" : ""}>{advice.reason}</span>
+            ) : kept.length ? (
+              `${kept.length} marked to keep`
+            ) : (
+              "Mark the ones worth having"
+            )}
             <br />tap the photo for the loupe
           </p>
           <button type="button" className={`m-verdict m-verdict-keep !h-14 !w-14 !text-2xl ${shot.verdict === "keep" ? "m-verdict-on" : ""}`}

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { BurstPick, DiskResult, ListResult, Shot } from "../types";
+import type { Advice, BurstPick, DiskResult, ListResult, Shot } from "../types";
 import { isTauri } from "./preview";
 
 type Envelope<T> = T & { ok: boolean; error?: string };
@@ -190,4 +190,7 @@ export const api = {
 
   refreshPreviews: () => runWorker(["refresh-previews"]),
   audit: (limit = 200) => runWorker<{ entries: any[] }>(["audit", "--limit", String(limit)]),
+
+  /** Every frame the local model has an opinion on. Read-only; the pass itself runs on the PC. */
+  advice: () => runWorker<{ advice: Advice[]; count: number }>(["advice", "--compact", "--limit", "0"]),
 };

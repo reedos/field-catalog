@@ -47,7 +47,15 @@ export function TabBar(props: { tab: TabKey; onTab: (t: TabKey) => void; badges?
   );
 }
 
-export function TopBar(props: { title: string; sub?: string; onBack?: () => void; right?: ReactNode }) {
+export function TopBar(props: {
+  title: string;
+  sub?: string;
+  onBack?: () => void;
+  right?: ReactNode;
+  /** "warn" paints the sub-line as something gone wrong rather than a running count. */
+  subTone?: "warn";
+  onSubTap?: () => void;
+}) {
   return (
     <header className="m-topbar">
       {props.onBack ? (
@@ -58,7 +66,19 @@ export function TopBar(props: { title: string; sub?: string; onBack?: () => void
       ) : null}
       <div className="min-w-0 flex-1">
         <h1 className="truncate font-serif text-[19px] leading-tight text-paper">{props.title}</h1>
-        {props.sub ? <p className="truncate text-xs text-paper-dim/80">{props.sub}</p> : null}
+        {props.sub ? (
+          props.onSubTap ? (
+            <button type="button" onClick={props.onSubTap}
+                    className={`block max-w-full truncate text-left text-xs underline decoration-dotted underline-offset-2 ${
+                      props.subTone === "warn" ? "text-reject" : "text-paper-dim/80"}`}>
+              {props.sub}
+            </button>
+          ) : (
+            <p className={`truncate text-xs ${props.subTone === "warn" ? "text-reject" : "text-paper-dim/80"}`}>
+              {props.sub}
+            </p>
+          )
+        ) : null}
       </div>
       {props.right}
     </header>

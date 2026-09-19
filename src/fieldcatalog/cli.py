@@ -598,6 +598,97 @@ def cmd_set_identify(ns: argparse.Namespace) -> int:
     )
 
 
+def cmd_advise(ns: argparse.Namespace) -> int:
+    """What the local model would do with each frame. It decides nothing."""
+    import sqlite3
+
+    from . import advise as advisor
+    from .vision import IdentifyError
+
+    cat = _catalog(ns)
+    where: dict[str, str] = {}
+    if ns.verdict:
+        where["verdict"] = ns.verdict
+    shots = cat.list(**where)
+    if ns.day:
+        shots = [s for s in shots if (s.captured_at or "")[:10] == ns.day]
+    if ns.burst:
+        shots = [s for s in shots if (s.burst_id or "").startswith(ns.burst)]
+
+    # advise() reads rows, not Shot objects: it wants the preview path and the
+    # measured sharpness together, and nothing it touches belongs to Shot.
+    rows = [dict(r) for r in cat.conn.execute(
+        "SELECT id, burst_id, preview_path, display_name, common_name, captured_at, "
+        "sharpness, subject_sharpness FROM shots WHERE id IN (%s)"
+        % ",".join("?" * len(shots)), [s.id for s in shots])] if shots else []
+
+    if ns.dry_run:
+        groups = advisor.group_shots(rows)
+        done = advisor.already_advised(cat.conn)
+        todo = [g for g in groups if any(r["id"] not in done for r in g)] if not ns.redo else groups
+        sheets = sum(len(advisor.in_sheets([r for r in g if ns.redo or r["id"] not in done]))
+                     for g in todo)
+        return _out(True, dry_run=True, shots=len(rows), groups=len(todo), sheets=sheets,
+                    already_advised=len(done),
+                    estimate_minutes=round(sheets * 13 / 60, 1))
+
+    log = (lambda line: print(line, file=sys.stderr, flush=True)) if ns.progress else None
+    try:
+        report = advisor.run(cat.conn, rows, redo=ns.redo, limit=ns.limit,
+                             log=log, library=Path(ns.library) if ns.library else None)
+    except IdentifyError as exc:
+        return _out(False, error=str(exc))
+    except sqlite3.Error as exc:
+        return _out(False, error=f"catalog: {exc}")
+    return _out(True, looked_at=report.looked_at, advised=report.advised, sheets=report.sheets,
+                keep=report.keep, reject=report.reject, picks=report.picks,
+                errors=report.errors[:20])
+
+
+def cmd_advice(ns: argparse.Namespace) -> int:
+    """Read back what the model advised."""
+    from . import advise as advisor
+
+    cat = _catalog(ns)
+    advisor.ensure_table(cat.conn)
+    if ns.compact:
+        # What the app needs to show a second opinion beside each frame, and no more.
+        rows = [{"id": r[0], "verdict": r[1], "reason": r[2], "pick": bool(r[3]),
+                 "distinct": bool(r[4])}
+                for r in cat.conn.execute(
+                    "SELECT shot_id, verdict, reason, pick, distinct_moment FROM advice")]
+        return _out(True, advice=rows, count=len(rows))
+
+    sql = ("SELECT a.shot_id, a.verdict, a.reason, a.pick, a.distinct_moment, a.burst_id, a.at, "
+           "s.display_name, s.common_name, s.verdict AS yours, s.captured_at "
+           "FROM advice a JOIN shots s ON s.id = a.shot_id")
+    args: list[object] = []
+    clauses = []
+    if ns.id:
+        clauses.append("a.shot_id = ?")
+        args.append(ns.id)
+    if ns.disagreed:
+        clauses.append("s.verdict <> 'unrated' AND s.verdict <> a.verdict")
+    if ns.picks_only:
+        clauses.append("a.pick = 1")
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY s.captured_at"
+    if ns.limit:
+        sql += " LIMIT ?"
+        args.append(ns.limit)
+    rows = [dict(r) for r in cat.conn.execute(sql, args)]
+    counts = dict(cat.conn.execute(
+        "SELECT verdict, count(*) FROM advice GROUP BY verdict").fetchall())
+    agreed = cat.conn.execute(
+        "SELECT count(*) FROM advice a JOIN shots s ON s.id = a.shot_id "
+        "WHERE s.verdict <> 'unrated' AND s.verdict = a.verdict").fetchone()[0]
+    differed = cat.conn.execute(
+        "SELECT count(*) FROM advice a JOIN shots s ON s.id = a.shot_id "
+        "WHERE s.verdict <> 'unrated' AND s.verdict <> a.verdict").fetchone()[0]
+    return _out(True, advice=rows, counts=counts, agreed=agreed, differed=differed)
+
+
 def cmd_bursts(ns: argparse.Namespace) -> int:
     """Bursts still awaiting a decision. A burst with nothing unrated has been
     dealt with, so it drops out of the queue unless --all asks for it."""
@@ -784,6 +875,26 @@ def build_parser() -> argparse.ArgumentParser:
     si.add_argument("--model", default=None, help="Ollama vision model name, e.g. llama3.2-vision")
     si.add_argument("--url", default=None, help="Ollama base URL")
     si.set_defaults(func=cmd_set_identify)
+
+    av = sub.add_parser("advise", help="ask the local model what it would keep; it decides nothing")
+    av.add_argument("--verdict", default="", help="only shots with this verdict (default: all)")
+    av.add_argument("--day", default="", help="only shots captured on this day, YYYY-MM-DD")
+    av.add_argument("--burst", default="", help="only this burst id (a prefix is enough)")
+    av.add_argument("--redo", action="store_true", help="advise again on shots already advised")
+    av.add_argument("--limit", type=int, default=0, help="stop after about this many shots")
+    av.add_argument("--dry-run", action="store_true", help="count the work, ask the model nothing")
+    av.add_argument("--progress", action="store_true", help="print each burst to stderr as it goes")
+    av.set_defaults(func=cmd_advise)
+
+    ar = sub.add_parser("advice", help="read back the model's advice")
+    ar.add_argument("--id", default="", help="one shot")
+    ar.add_argument("--disagreed", action="store_true",
+                    help="only where your verdict and the model's differ")
+    ar.add_argument("--picks-only", action="store_true", help="only the best-of-burst frames")
+    ar.add_argument("--compact", action="store_true",
+                    help="just id, verdict, reason and pick, for the app to read")
+    ar.add_argument("--limit", type=int, default=200, help="0 for all")
+    ar.set_defaults(func=cmd_advice)
 
     br = sub.add_parser("bursts", help="bursts awaiting a decision; --all includes resolved ones")
     br.add_argument("--all", action="store_true", help="include bursts already culled")

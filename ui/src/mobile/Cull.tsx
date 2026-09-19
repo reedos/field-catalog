@@ -225,12 +225,17 @@ export function Cull(props: {
   const held = `translate(${drag.x}px, ${Math.min(0, drag.y)}px) rotate(${lean * 9}deg)`;
   const burst = shot.burst_id ? burstSizes.get(shot.burst_id) || 0 : 0;
   const time = (shot.captured_at || "").slice(11, 16);
+  const advice = store.advice.get(shot.id);
 
   return (
     <div className="m-screen m-noselect">
       <TopBar
         title={title}
-        sub={`${index + 1} of ${queue.length} unrated`}
+        sub={store.unsaved
+          ? `${store.unsaved} not saved \u00b7 tap to check`
+          : `${index + 1} of ${queue.length}${store.saved ? ` \u00b7 ${store.saved} saved` : ""}`}
+        subTone={store.unsaved ? "warn" : undefined}
+        onSubTap={store.unsaved ? () => void store.retrySaves() : undefined}
         onBack={props.onExit}
         right={
           <button type="button" className="m-iconbtn" onClick={() => props.onInfo(shot.id)} aria-label="Details">
@@ -317,6 +322,18 @@ export function Cull(props: {
             </button>
           ) : null}
         </div>
+
+        {advice ? (
+          <div className="mt-1.5 flex items-start gap-2">
+            <span className={`m-advice ${advice.pick ? "m-advice-pick"
+              : advice.verdict === "keep" ? "m-advice-keep" : "m-advice-reject"}`}>
+              {advice.pick ? "pick of the burst" : advice.verdict}
+            </span>
+            <p className="min-w-0 flex-1 truncate pt-0.5 text-xs italic text-paper-dim/70" title={advice.reason}>
+              {advice.reason}
+            </p>
+          </div>
+        ) : null}
 
         <div className="mt-1 flex items-center justify-between">
           <Stars value={shot.stars || 0} onChange={(n) => store.setStars(shot.id, n)} />

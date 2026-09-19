@@ -49,6 +49,17 @@ CREATE TABLE IF NOT EXISTS shots (
   subject_box TEXT,
   subject_sharpness REAL
 );
+CREATE TABLE IF NOT EXISTS advice (
+  shot_id TEXT PRIMARY KEY,
+  verdict TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  pick INTEGER NOT NULL DEFAULT 0,
+  distinct_moment INTEGER NOT NULL DEFAULT 0,
+  burst_id TEXT,
+  model TEXT,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_advice_verdict ON advice(verdict);
 CREATE INDEX IF NOT EXISTS idx_shots_verdict ON shots(verdict);
 CREATE INDEX IF NOT EXISTS idx_shots_status ON shots(original_status);
 CREATE INDEX IF NOT EXISTS idx_shots_burst ON shots(burst_id);

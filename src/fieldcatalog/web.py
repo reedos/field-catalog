@@ -51,6 +51,9 @@ ALLOWED = frozenset({
     "set-location-by-date", "identify", "identify-cancel", "life-list-pick", "clear-identity",
     "set-key", "key-status", "set-identify", "bursts", "pending-deletes", "delete-originals",
     "offload-originals", "import", "export-originals", "refresh-previews", "audit",
+    # Reading the model's advice, not running the pass: a two-hour vision job would
+    # hold a lane for the whole of it, and it belongs on the machine with the GPU.
+    "advice",
 })
 # These lift a safety rule. The UI never sends them; over a network nothing may.
 # Named as argparse stores them: the check reads the PARSED request, because

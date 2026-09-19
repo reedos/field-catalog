@@ -1,5 +1,33 @@
 export type AnimalType = "bird" | "mammal" | "herp" | "fish" | "invertebrate" | "other";
 export type Verdict = "keep" | "reject" | "unrated";
+
+/**
+ * What the local model would do with a frame. Advice only -- it is never a verdict,
+ * and nothing in the app acts on it without a tap from Reed.
+ */
+export interface Advice {
+  id: string;
+  verdict: "keep" | "reject";
+  reason: string;
+  /** the model's best frame of this burst */
+  pick: boolean;
+  /** a different moment in the same burst, worth keeping on its own */
+  distinct: boolean;
+}
+
+/**
+ * What the local model would do with a frame. Advice only -- it is never a verdict,
+ * and nothing in the app acts on it without a tap from Reed.
+ */
+export interface Advice {
+  id: string;
+  verdict: "keep" | "reject";
+  reason: string;
+  /** the model's best frame of this burst */
+  pick: boolean;
+  /** a different moment in the same burst, worth keeping on its own */
+  distinct: boolean;
+}
 export type OriginalStatus = "present" | "deleted" | "offloaded";
 export type ColorLabel = "red" | "yellow" | "green" | "blue" | "purple";
 export type View = "library" | "map" | "bursts" | "life" | "guide" | "settings";

@@ -351,3 +351,19 @@ button.m-row:active { background: rgba(58, 50, 40, 0.45); }
 /* The desktop map, reused. A phone pinch-zooms, and the buttons sit on the pin count. */
 .m-app .leaflet-control-zoom { display: none; }
 .m-app .leaflet-container { background: #161410; }
+
+/* The local model's second opinion. Quiet by design: it is advice beside a
+   photograph, not a verdict on it, and the eye should reach the picture first. */
+.m-advice {
+  flex: none;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.35rem;
+  border: 1px solid;
+  font-size: 11px;
+  line-height: 1.15rem;
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+}
+.m-advice-keep { border-color: rgba(106, 122, 82, 0.7); color: #b9cc9c; }
+.m-advice-reject { border-color: rgba(166, 93, 74, 0.7); color: #e2a897; }
+.m-advice-pick { border-color: #c4a36a; background: rgba(196, 163, 106, 0.16); color: #e6cf9f; }

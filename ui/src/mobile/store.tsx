@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { AnimalType, Shot, Verdict } from "../types";
+import type { Advice, AnimalType, Shot, Verdict } from "../types";
 import { COLOR_CYCLE } from "../types";
 import { api } from "../lib/worker";
 import { normalizeShot, useShots } from "../hooks/useShots";
@@ -35,6 +35,11 @@ export function byShootingOrder(a: Shot, b: Shot): number {
 
 function useStoreValue() {
   const [ready, setReady] = useState(false);
+  const [advice, setAdvice] = useState<Map<string, Advice>>(new Map());
+  // Verdicts that failed to reach the PC. A swipe is silent when it works, so a
+  // failure has to be loud: the count on the cull screen turns into a warning.
+  const [unsaved, setUnsaved] = useState(0);
+  const [saved, setSaved] = useState(0);
   const [busy, setBusy] = useState("");
   const [error, setErrorText] = useState("");
   const [notice, setNotice] = useState("");
@@ -58,6 +63,11 @@ function useStoreValue() {
         await identify.loadKeyStatus();
         await reload();
         setReady(true);
+        // Last, and allowed to fail: a library with no advice pass behind it works
+        // exactly as before, minus the second opinion.
+        api.advice()
+          .then((res) => setAdvice(new Map((res.advice || []).map((a) => [a.id, a]))))
+          .catch(() => {});
       } catch (e) {
         fail(e);
       } finally {
@@ -112,9 +122,28 @@ function useStoreValue() {
 
   // --- writes: the desktop's own, one for one ---
 
+  /**
+   * A verdict is written the moment it is made, and a swipe that works looks
+   * exactly like a swipe that failed -- the card has already flown off either way.
+   * So count both: the tally on the cull screen is the only thing that can show
+   * the difference, and it turns into a warning the moment one does not land.
+   */
+  function counted(n: number, write: () => Promise<unknown>) {
+    return write().then(
+      (res) => {
+        setSaved((k) => k + n);
+        return res;
+      },
+      (err) => {
+        setUnsaved((k) => k + n);
+        throw err;
+      },
+    );
+  }
+
   function setVerdict(id: string, v: Verdict) {
     recordVerdictUndo([{ id, next: v }]);
-    void optimistic(new Map([[id, { verdict: v }]]), () => api.setVerdict(id, v));
+    void optimistic(new Map([[id, { verdict: v }]]), () => counted(1, () => api.setVerdict(id, v)));
   }
 
   function setVerdicts(pairs: Array<{ id: string; verdict: Verdict }>) {
@@ -122,7 +151,22 @@ function useStoreValue() {
     recordVerdictUndo(pairs.map((p) => ({ id: p.id, next: p.verdict })));
     const patches = new Map<string, Partial<Shot>>();
     for (const p of pairs) patches.set(p.id, { verdict: p.verdict });
-    void optimistic(patches, () => Promise.all(pairs.map((p) => api.setVerdict(p.id, p.verdict))));
+    void optimistic(patches, () =>
+      counted(pairs.length, () => Promise.all(pairs.map((p) => api.setVerdict(p.id, p.verdict)))));
+  }
+
+  /** Try the failed writes again, by asking the PC what it actually holds. */
+  async function retrySaves() {
+    setBusy("Checking what the PC has…");
+    try {
+      await reload();
+      setUnsaved(0);
+      setNotice("Back in step with the PC");
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy("");
+    }
   }
 
   function undo(): number {
@@ -231,7 +275,7 @@ function useStoreValue() {
   return {
     ready, busy, setBusy, error, setError, fail, notice, setNotice, library,
     shots, shotsById, reload, outings, locations, burstSizes, fieldMarkOptions,
-    identify,
+    identify, advice, saved, unsaved, retrySaves,
     setVerdict, setVerdicts, undo, toggleFavorite, setStars, cycleColor, setAnimalType,
     saveIdentity, clearIdentity, saveFieldMarks, setLocationLabel, labelDay, setLifeListPick,
   };
