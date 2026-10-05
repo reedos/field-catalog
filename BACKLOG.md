@@ -6,16 +6,6 @@ Known-broken and known-missing, kept honest. Shipped work moves to Done.
 - [ ] Pending-deletes quick view: show count in Toolbar badge, open dry-run dialog directly
 - [ ] "Pending" toolbar button is a duplicate of "Delete rejected" — give it its own
       handler or remove it
-- [ ] Ship off this machine. Two halves:
-      - [x] Runtime lookup: `find_cli()` now checks beside the app executable and
-            `resources/` before falling back to the dev venv, so an installed app
-            no longer depends on `CARGO_MANIFEST_DIR`.
-      - [ ] Ship an actual CLI. `.venv/Scripts/fieldcatalog.exe` is a 108 KB
-            setuptools launcher that resolves Python relative to itself — it needs
-            the whole venv beside it and cannot be bundled alone. Freeze the worker
-            with PyInstaller into a standalone exe, then declare it as a Tauri
-            sidecar (`externalBin`, named `fieldcatalog-x86_64-pc-windows-msvc.exe`).
-            Adds a build step and roughly 40-80 MB to the installer.
 
 ## Medium
 - [ ] Meter component: ensure gradient renders on all browsers
@@ -33,8 +23,6 @@ Known-broken and known-missing, kept honest. Shipped work moves to Done.
 
 ## Bugs
 - [ ] Vite dev deps install reliably on Windows
-- [ ] Import dedupe is path-based, so a moved or renamed original re-imports as a new
-      shot and orphans the old row
 
 ## Done
 - [x] Keepers slideshow: full-screen review of the keepers in the current view,

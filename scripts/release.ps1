@@ -8,7 +8,8 @@
   rather than producing something half-done.
 
 .PARAMETER Version
-  The new version, e.g. 0.2.0. Must be higher than the current one.
+  The new version in x.y.z form. Choose a version higher than the current release;
+  an equal, untagged version can resume an interrupted release.
 
 .PARAMETER SkipPublish
   Build and tag locally, but do not push or create the GitHub release.
@@ -20,7 +21,8 @@
   Report what would happen and change nothing.
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File scripts\release.ps1 -Version 0.2.0
+  $releaseVersion = Read-Host 'New release version (greater than the current release)'
+  powershell -ExecutionPolicy Bypass -File scripts\release.ps1 -Version $releaseVersion
 #>
 [CmdletBinding()]
 param(

@@ -109,7 +109,7 @@ it up rather than an answer.
 
 ## Install
 
-Download **`Field-Catalog-x.y.z-x64-setup.exe`** from the
+Download **`Field-Catalog_x.y.z_x64-setup.exe`** from the
 [latest release](https://github.com/reedos/field-catalog/releases/latest) and run it.
 The Python worker is bundled, so nothing else needs installing.
 

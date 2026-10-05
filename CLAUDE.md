@@ -104,10 +104,10 @@ SaaS dashboard look. Use the tokens, don't hardcode hex.
 
 ## Before reporting a bug
 
-Check `BACKLOG.md` first — it already documents several known issues, including: `find_cli()`
-bakes in `CARGO_MANIFEST_DIR` so the NSIS bundle only runs on this machine; a forward-button history
-bug; four sources of truth for the animal-type enum; `xai.key` stored plaintext; path-based import
-dedupe orphaning moved originals.
+Check `BACKLOG.md` first for current open items, including the pending-delete shortcut,
+view filters and duplicated animal-type definitions. Installer bundling, forward navigation
+and content-hash relinking of moved originals are shipped; do not report their former
+limitations as current defects. Identification keys remain in the private library folder.
 
 ## Don't
 

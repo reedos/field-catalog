@@ -85,7 +85,8 @@ almost any bug.
 ## Cutting a release
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version 0.2.0
+$releaseVersion = Read-Host 'New release version (greater than the current release)'
+powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Version $releaseVersion
 ```
 
 That bumps the version in all four files that carry it, checks they agree, runs
