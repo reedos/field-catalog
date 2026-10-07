@@ -372,7 +372,7 @@ export default function Detail(props: {
           {marks.length ? (
             <ul className="list-disc pl-5 text-sm text-paper space-y-1">
               {marks.map((m) => (
-                <li key={m} className="break-words">
+                <li key={m} className="wrap-break-word">
                   {m}
                 </li>
               ))}
@@ -393,7 +393,7 @@ export default function Detail(props: {
             lang="zxx"
             autoCorrect="off"
             autoCapitalize="off"
-            className="w-full bg-charcoal border border-bark px-2 py-1 text-sm resize-y whitespace-pre-wrap break-words"
+            className="w-full bg-charcoal border border-bark px-2 py-1 text-sm resize-y whitespace-pre-wrap wrap-break-word"
           />
           {/* A textarea cannot use a datalist, so suggestions are chips. */}
           {unusedSuggestions.length ? (

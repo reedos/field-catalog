@@ -194,7 +194,7 @@ export default function Slideshow(props: {
 
   if (!shot) {
     return (
-      <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center gap-4 bg-ink font-serif text-paper-dim">
+      <div className="fixed inset-0 z-70 flex flex-col items-center justify-center gap-4 bg-ink font-serif text-paper-dim">
         <div>Nothing {SCOPES[scope].label.toLowerCase()} in the current view.</div>
         <div className="flex items-center gap-2">
           <select
@@ -222,7 +222,7 @@ export default function Slideshow(props: {
 
   return (
     <div
-      className="fixed inset-0 z-[70] bg-black"
+      className="fixed inset-0 z-70 bg-black"
       onMouseMove={wake}
       style={{ cursor: controlsVisible ? "default" : "none" }}
     >
@@ -240,7 +240,7 @@ export default function Slideshow(props: {
         className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-5 transition-opacity duration-500"
         style={{ opacity: captionVisible ? 1 : 0 }}
       >
-        <div className="rounded bg-black/45 px-3 py-2 backdrop-blur-sm">
+        <div className="rounded-sm bg-black/45 px-3 py-2 backdrop-blur-xs">
           <div className="font-serif text-xl text-paper">{title}</div>
           <div className="text-xs italic text-paper-dim">
             {shot.scientific_name || ""}
@@ -250,7 +250,7 @@ export default function Slideshow(props: {
           <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-paper-dim">
             {shot.verdict !== "keep" ? (
               <span
-                className={`rounded-sm px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
+                className={`rounded-xs px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${
                   shot.verdict === "reject" ? "bg-reject text-paper" : "border border-bark text-paper-dim"
                 }`}
               >
@@ -263,7 +263,7 @@ export default function Slideshow(props: {
             {shot.favorite ? " · ★ favorite" : ""}
           </div>
         </div>
-        <div className="rounded bg-black/45 px-3 py-2 text-xs tabular-nums text-paper-dim">
+        <div className="rounded-sm bg-black/45 px-3 py-2 text-xs tabular-nums text-paper-dim">
           {index + 1} / {total}
         </div>
       </div>

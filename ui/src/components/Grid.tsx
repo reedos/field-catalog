@@ -390,14 +390,14 @@ function Cell(props: {
         <div className="absolute top-1 left-1 flex gap-1">
           {shot.verdict !== "unrated" ? (
             <span
-              className={`rounded-sm px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider shadow-sm ${
+              className={`rounded-xs px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider shadow-xs ${
                 shot.verdict === "keep" ? "bg-moss text-paper" : "bg-reject text-paper"
               }`}
             >
               {shot.verdict}
             </span>
           ) : null}
-          {shot.favorite ? <span className="rounded-sm bg-ochre px-1 py-0.5 text-[9px] text-ink shadow-sm">★</span> : null}
+          {shot.favorite ? <span className="rounded-xs bg-ochre px-1 py-0.5 text-[9px] text-ink shadow-xs">★</span> : null}
         </div>
         {shot.color ? (
           <span className="absolute top-1 right-1 h-2 w-2 rounded-full" style={{ background: shot.color }} />
@@ -428,7 +428,7 @@ function Mini(props: { onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
-      className="rounded border border-bark px-1.5 py-0.5 text-[9px] tracking-wide text-paper-dim transition-colors duration-150 hover:border-moss hover:text-moss"
+      className="rounded-sm border border-bark px-1.5 py-0.5 text-[9px] tracking-wide text-paper-dim transition-colors duration-150 hover:border-moss hover:text-moss"
       onClick={(e) => {
         e.stopPropagation();
         props.onClick();

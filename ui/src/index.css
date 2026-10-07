@@ -1,19 +1,140 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
+@theme {
+  --color-ink: #161410;
+  --color-charcoal: #241f1a;
+  --color-bark: #3a3228;
+  --color-paper: #efe6d6;
+  --color-paper-dim: #d9cdb8;
+  --color-moss: #6a7a52;
+  --color-moss-dark: #4e5c3c;
+  --color-ochre: #c4a36a;
+  --color-reject: #a65d4a;
+
+  --font-serif: 'Iowan Old Style', Palatino Linotype, Palatino, Georgia, serif;
+  --font-sans: Segoe UI, system-ui, sans-serif;
 }
 
-body {
-  background: #161410;
-  color: #efe6d6;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility fc-btn {
+  /* One button vocabulary for the whole app. Pair fc-btn with a variant. */
+  @apply inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-sm leading-none whitespace-nowrap select-none transition-colors duration-150;
+  &:active {
+    transform: translateY(1px);
+  }
+  &:disabled {
+    @apply opacity-40 cursor-not-allowed;
+  }
+}
+
+@utility fc-accent {
+  @apply border-moss/70 text-moss hover:bg-moss hover:text-paper hover:border-moss;
+}
+
+@utility fc-warn {
+  @apply border-ochre/50 text-ochre hover:bg-ochre hover:text-ink hover:border-ochre;
+}
+
+@utility fc-danger {
+  @apply border-reject/50 text-reject hover:bg-reject hover:text-paper hover:border-reject;
+}
+
+@utility fc-ghost {
+  @apply border-transparent text-paper-dim hover:text-paper hover:bg-bark/50;
+}
+
+@utility fc-over-map {
+  /*
+   * For a control floating over map tiles rather than over one of the app's
+   * own surfaces. The ground underneath is light or dark depending on the
+   * basemap, so this one brings its own instead of borrowing.
+   */
+  @apply border-bark bg-charcoal/95 text-paper shadow-md shadow-ink/50 hover:bg-bark hover:text-paper;
+}
+
+@utility fc-input {
+  @apply bg-charcoal border border-bark rounded-md px-2.5 py-1.5 text-sm outline-hidden transition-colors duration-150 placeholder:text-paper-dim/60;
+  &:focus {
+    @apply border-moss;
+  }
+}
+
+@utility fc-select {
+  @apply bg-charcoal border border-bark rounded-md px-2 py-1.5 text-sm text-paper-dim outline-hidden transition-colors duration-150 cursor-pointer;
+  &:hover {
+    @apply border-moss/70 text-paper;
+  }
+  &:focus {
+    @apply border-moss/70 text-paper;
+  }
+}
+
+@utility sr-only {
+  /* Announced to assistive tech, invisible on screen. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+@utility fc-kbd {
+  /* Keyboard hint chip, dark chrome. */
+  @apply inline-block rounded-sm border border-bark bg-ink px-1.5 py-0.5 text-[10px] leading-none text-paper-dim align-middle;
+}
+
+@utility fc-slide {
+  /* Slideshow: a slide fades up from black, and a hairline tracks the dwell. */
+  animation: fc-slide-in 600ms ease both;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility fc-slide-bar {
+  animation: fc-slide-bar linear both;
+}
+
+@utility fc-card {
+  /* Light modal card on the dark app. */
+  @apply bg-paper text-ink rounded-lg shadow-2xl ring-1 ring-bark/40;
+}
+
+@layer utilities {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    background: #161410;
+    color: #efe6d6;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
 }
 
 @layer base {
@@ -21,82 +142,11 @@ body {
     @apply bg-moss/50 text-paper;
   }
   :focus-visible {
-    @apply outline outline-2 outline-ochre/70 outline-offset-1;
+    @apply outline-solid outline-2 outline-ochre/70 outline-offset-1;
   }
 }
 
 @layer components {
-  /* One button vocabulary for the whole app. Pair fc-btn with a variant. */
-  .fc-btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-sm leading-none whitespace-nowrap select-none transition-colors duration-150;
-  }
-  .fc-btn:active {
-    transform: translateY(1px);
-  }
-  .fc-btn:disabled {
-    @apply opacity-40 cursor-not-allowed;
-  }
-  .fc-accent {
-    @apply border-moss/70 text-moss hover:bg-moss hover:text-paper hover:border-moss;
-  }
-  .fc-warn {
-    @apply border-ochre/50 text-ochre hover:bg-ochre hover:text-ink hover:border-ochre;
-  }
-  .fc-danger {
-    @apply border-reject/50 text-reject hover:bg-reject hover:text-paper hover:border-reject;
-  }
-  .fc-ghost {
-    @apply border-transparent text-paper-dim hover:text-paper hover:bg-bark/50;
-  }
-  /*
-   * For a control floating over map tiles rather than over one of the app's
-   * own surfaces. The ground underneath is light or dark depending on the
-   * basemap, so this one brings its own instead of borrowing.
-   */
-  .fc-over-map {
-    @apply border-bark bg-charcoal/95 text-paper shadow-md shadow-ink/50 hover:bg-bark hover:text-paper;
-  }
-
-  .fc-input {
-    @apply bg-charcoal border border-bark rounded-md px-2.5 py-1.5 text-sm outline-none transition-colors duration-150 placeholder:text-paper-dim/60;
-  }
-  .fc-input:focus {
-    @apply border-moss;
-  }
-
-  .fc-select {
-    @apply bg-charcoal border border-bark rounded-md px-2 py-1.5 text-sm text-paper-dim outline-none transition-colors duration-150 cursor-pointer;
-  }
-  .fc-select:hover,
-  .fc-select:focus {
-    @apply border-moss/70 text-paper;
-  }
-
-  /* Announced to assistive tech, invisible on screen. */
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border-width: 0;
-  }
-
-  /* Keyboard hint chip, dark chrome. */
-  .fc-kbd {
-    @apply inline-block rounded border border-bark bg-ink px-1.5 py-0.5 text-[10px] leading-none text-paper-dim align-middle;
-  }
-
-  /* Slideshow: a slide fades up from black, and a hairline tracks the dwell. */
-  .fc-slide {
-    animation: fc-slide-in 600ms ease both;
-  }
-  .fc-slide-bar {
-    animation: fc-slide-bar linear both;
-  }
   @keyframes fc-slide-in {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -104,14 +154,6 @@ body {
   @keyframes fc-slide-bar {
     from { width: 0%; }
     to { width: 100%; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .fc-slide { animation: none; }
-  }
-
-  /* Light modal card on the dark app. */
-  .fc-card {
-    @apply bg-paper text-ink rounded-lg shadow-2xl ring-1 ring-bark/40;
   }
 }
 
@@ -121,11 +163,13 @@ body {
   border-radius: 999px;
 }
 
-input,
-select,
-textarea,
-button {
-  font: inherit;
+@layer base {
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
 }
 
 .leaflet-container {

@@ -71,7 +71,7 @@ export default function Toolbar(props: {
             aria-current={props.view === item.id ? "page" : undefined}
             className={`rounded-md px-3 py-1 text-sm transition-colors duration-150 ${
               props.view === item.id
-                ? "bg-moss text-paper shadow-sm"
+                ? "bg-moss text-paper shadow-xs"
                 : "text-paper-dim hover:bg-bark/50 hover:text-paper"
             }`}
           >

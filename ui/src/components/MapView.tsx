@@ -108,7 +108,7 @@ export default function MapView(props: {
       <button
         type="button"
         onClick={() => setDark((d) => !d)}
-        className="fc-btn fc-over-map absolute right-3 top-3 z-[1200]"
+        className="fc-btn fc-over-map absolute right-3 top-3 z-1200"
         title={dark ? "Show the map as drawn, for reading terrain" : "Dim the map back into the journal"}
       >
         {dark ? "Light map" : "Dark map"}
@@ -168,13 +168,13 @@ function SpeciesList(props: { shots: Shot[]; onOpen: (id: string) => void }) {
             key={r.key}
             type="button"
             onClick={() => props.onOpen(r.best.id)}
-            className="fc-pop-row flex items-center gap-2 rounded-sm p-0.5 text-left text-xs"
+            className="fc-pop-row flex items-center gap-2 rounded-xs p-0.5 text-left text-xs"
             title={`Open the best frame of ${r.name}`}
           >
             <img
               src={previewUrl(r.best.preview_path)}
               alt=""
-              className="h-8 w-8 shrink-0 rounded-sm object-cover"
+              className="h-8 w-8 shrink-0 rounded-xs object-cover"
             />
             <span className="min-w-0 flex-1 truncate underline">{r.name}</span>
             {r.count > 1 ? <span className="fc-pop-muted shrink-0">{r.count}</span> : null}

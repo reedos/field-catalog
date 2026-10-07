@@ -98,7 +98,7 @@ one-shot CLI quick.
 lanes on separate connections, and one-shot CLI calls can still race the app). Migrations are
 additive via `PRAGMA table_info` checks in `_migrate()`.
 
-**Theme:** `ui/tailwind.config.js` defines the field-journal palette — `ink`, `charcoal`, `bark`,
+**Theme:** `@theme` in `ui/src/index.css` defines the field-journal palette — `ink`, `charcoal`, `bark`,
 `paper`, `paper-dim`, `moss`, `moss-dark`, `ochre`, `reject`, serif-first stack. Deliberately not a
 SaaS dashboard look. Use the tokens, don't hardcode hex.
 

@@ -197,14 +197,14 @@ export default function CompareView(props: {
   const rows = Math.ceil(Math.max(1, shown.length) / cols);
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-ink">
+    <div className="fixed inset-0 z-60 flex flex-col bg-ink">
       <div className="flex items-center gap-3 border-b border-bark bg-charcoal px-4 py-2">
         <div className="font-serif text-base tracking-wide text-paper">
           Compare <span className="text-ochre">·</span> {props.members.length} frame
           {props.members.length === 1 ? "" : "s"}
         </div>
         {props.queuePos ? (
-          <span className="rounded-sm border border-ochre/50 px-1.5 py-0.5 text-[11px] text-ochre">
+          <span className="rounded-xs border border-ochre/50 px-1.5 py-0.5 text-[11px] text-ochre">
             {props.queuePos.index} of {props.queuePos.total}
           </span>
         ) : null}
@@ -343,17 +343,17 @@ export default function CompareView(props: {
                     )
                   ) : null}
                   {isKeep ? (
-                    <span className="absolute left-2 top-2 rounded-sm bg-moss px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-paper shadow-sm">
+                    <span className="absolute left-2 top-2 rounded-xs bg-moss px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-paper shadow-xs">
                       keep
                     </span>
                   ) : null}
                   {isReject ? (
-                    <span className="absolute left-2 top-2 rounded-sm bg-reject px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-paper shadow-sm">
+                    <span className="absolute left-2 top-2 rounded-xs bg-reject px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-paper shadow-xs">
                       reject
                     </span>
                   ) : null}
                   {shot.id === recommendedId ? (
-                    <span className="absolute right-2 top-2 rounded-sm border border-ochre bg-ink/70 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-ochre">
+                    <span className="absolute right-2 top-2 rounded-xs border border-ochre bg-ink/70 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-ochre">
                       pick
                     </span>
                   ) : null}

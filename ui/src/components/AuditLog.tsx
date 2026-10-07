@@ -5,7 +5,7 @@ export default function AuditLog(props: {
 }) {
   const { dialogProps } = useModalDialog({ labelledBy: "audit-title" });
   return (
-    <div className="fixed inset-0 z-[90] bg-ink/80 flex items-center justify-center p-6">
+    <div className="fixed inset-0 z-90 bg-ink/80 flex items-center justify-center p-6">
       <div {...dialogProps} className="fc-card w-full max-w-2xl max-h-[80vh] flex flex-col font-serif">
         <div className="px-5 py-3 border-b border-paper-dim">
           <h2 id="audit-title" className="text-xl">Audit log</h2>

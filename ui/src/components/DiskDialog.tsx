@@ -32,7 +32,7 @@ export default function DiskDialog(props: {
     (props.kind === "delete" || props.cloudOk);
 
   return (
-    <div className="fixed inset-0 z-[80] bg-ink/80 flex items-center justify-center p-6">
+    <div className="fixed inset-0 z-80 bg-ink/80 flex items-center justify-center p-6">
       <div {...dialogProps} className="fc-card w-full max-w-3xl max-h-[90vh] flex flex-col font-serif">
         <div className="px-5 py-3 border-b border-paper-dim">
           <h2 id="disk-title" className="text-xl">

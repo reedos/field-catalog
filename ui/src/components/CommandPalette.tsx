@@ -66,7 +66,7 @@ export default function CommandPalette({
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Jump to view or recent history…"
-            className="flex-1 bg-transparent outline-none"
+            className="flex-1 bg-transparent outline-hidden"
             onKeyDown={e => {
               if (e.key === "Escape") onClose();
             }}

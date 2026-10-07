@@ -126,7 +126,9 @@ key. See [Identification](#identification); it is optional.
 
 ## Build from source
 
-Needs Python 3.10+, Node 20+ and Rust.
+Needs Python 3.10+, Node 24 LTS and Rust.
+
+Dependency monitoring and the Linux-only GLib advisory are documented in [SECURITY.md](SECURITY.md).
 
 ```bash
 git clone https://github.com/reedos/field-catalog.git

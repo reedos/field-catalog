@@ -170,7 +170,7 @@ export default function LifeList(props: {
                 }`}
                 title={`Open this frame of ${sp.common} in the panel`}
               >
-                <div className="relative aspect-[3/2] overflow-hidden bg-ink">
+                <div className="relative aspect-3/2 overflow-hidden bg-ink">
                   {src ? (
                     <img
                       src={src}
@@ -183,7 +183,7 @@ export default function LifeList(props: {
                   ) : null}
                   {sp.chosen ? (
                     <span
-                      className="absolute right-1.5 top-1.5 rounded-sm bg-ochre px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-ink"
+                      className="absolute right-1.5 top-1.5 rounded-xs bg-ochre px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-ink"
                       title="You chose this frame"
                     >
                       chosen
@@ -260,7 +260,7 @@ export default function LifeList(props: {
                             props.onPick(shot.id);
                             setPicking(null);
                           }}
-                          className={`relative h-14 w-20 overflow-hidden rounded-sm transition-shadow ${
+                          className={`relative h-14 w-20 overflow-hidden rounded-xs transition-shadow ${
                             inUse ? "ring-2 ring-ochre" : "ring-1 ring-bark hover:ring-moss"
                           }`}
                           title={
